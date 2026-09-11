@@ -183,8 +183,8 @@ func TestRunDetectionFailures(t *testing.T) {
 		require.ErrorContains(t, err, "no python project detected")
 	})
 	t.Run("unknown stack", func(t *testing.T) {
-		_, err := execute(t, goProject(t), "--yes", "--verify=none", "--stack=rust")
-		require.ErrorContains(t, err, `unknown stack "rust"`)
+		_, err := execute(t, goProject(t), "--yes", "--verify=none", "--stack=cobol")
+		require.ErrorContains(t, err, `unknown stack "cobol"`)
 	})
 	t.Run("service escape", func(t *testing.T) {
 		_, err := execute(t, goProject(t), "--yes", "--verify=none", "--service=../elsewhere")

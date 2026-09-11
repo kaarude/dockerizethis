@@ -1,0 +1,23 @@
+--- Dockerfile (mode 0644) ---
+FROM rust:1.85-bookworm AS builder
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libpq5 libssl3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 app && useradd --uid 10001 --gid app --create-home app
+WORKDIR /app
+COPY --from=builder --chown=10001:10001 /app/target/release/api /app/server
+USER 10001:10001
+EXPOSE 3000
+CMD ["/app/server"]
+--- .dockerignore (mode 0644) ---
+.git
+.env*
+target
+Dockerfile
+docker-compose.yml
