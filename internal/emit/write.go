@@ -13,8 +13,9 @@ import (
 
 const defaultFileMode fs.FileMode = 0o644
 
-// diffWriter receives dry-run previews. Tests replace it to capture output.
-var diffWriter io.Writer = os.Stdout
+// Dry-run diffs go to stderr so stdout can contain a single JSON report.
+// Tests replace diffWriter to capture output.
+var diffWriter io.Writer = os.Stderr
 
 // write implements Write: it writes each file under root, leaving existing
 // files untouched unless opts.Force or opts.Backup allows a replacement.

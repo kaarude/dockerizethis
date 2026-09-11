@@ -30,7 +30,8 @@ reads project files without installing dependencies or executing scripts.
   use 8080 (the generated nginx runtime), and remaining projects use 0.
   With multiple fallbacks, the first valid one in lexical file order wins.
   The scan does not evaluate JavaScript or resolve arbitrary variable assignments.
-- A static project built by react-scripts without Vite records
+- A static project with an explicit `react-scripts build` command, or with
+  react-scripts installed without Vite, records
   `Extras["staticDir"]="build"`, matching the `react-scripts build` output
   directory. Everything else defaults to `dist` at render time.
 - A service requires both its environment name and matching driver dependency.

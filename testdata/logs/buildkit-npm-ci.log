@@ -1,0 +1,45 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 362B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 142B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:20-alpine
+#3 DONE 1.1s
+
+#4 [1/5] FROM docker.io/library/node:20-alpine@sha256:9a8b7c6d5e4f
+#4 resolve docker.io/library/node:20-alpine@sha256:9a8b7c6d5e4f done
+#4 DONE 0.0s
+
+#5 [2/5] WORKDIR /app
+#5 CACHED
+
+#6 [3/5] COPY package.json package-lock.json ./
+#6 DONE 0.1s
+
+#7 [4/5] RUN npm ci
+#7 0.832 npm WARN config production Use `--omit=dev` instead.
+#7 1.204 npm ERR! code EUSAGE
+#7 1.205 npm ERR!
+#7 1.205 npm ERR! `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with `npm install` before continuing.
+#7 1.205 npm ERR!
+#7 1.206 npm ERR! Missing: left-pad@1.3.0 from lock file
+#7 ERROR: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+------
+ > [4/5] RUN npm ci:
+1.204 npm ERR! code EUSAGE
+1.205 npm ERR! `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with `npm install` before continuing.
+------
+Dockerfile:8
+--------------------
+   6 |     COPY package.json package-lock.json ./
+   7 |
+   8 | >>> RUN npm ci
+   9 |
+  10 |     COPY . .
+--------------------
+ERROR: failed to solve: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
