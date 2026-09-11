@@ -127,10 +127,11 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		p.Notes = append(p.Notes, "no start script or main field; provide a start command")
 	}
 
-	p.Env, p.Port, err = scanSources(dir)
+	scan, err := scanSources(dir, p.Framework)
 	if err != nil {
 		return plan.Plan{}, false, err
 	}
+	p.Env, p.Port = scan.env, scan.port
 	if p.Port == 0 {
 		switch {
 		case p.Framework == "next" || p.Framework == "nuxt":
@@ -140,6 +141,14 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		case p.Process == plan.ProcessStatic:
 			// The generated runtime is nginx, which needs a valid listen port.
 			p.Port = 8080
+		case p.Process == plan.ProcessWeb:
+			p.Port = scan.listenPort
+		}
+	}
+	if p.Process == plan.ProcessWeb {
+		p.HealthPath = scan.healthPath
+		if p.Port == 0 {
+			p.Notes = append(p.Notes, "could not detect a listen port; use process.env.PORT with a default or a literal .listen(port) call")
 		}
 	}
 	// An explicit react-scripts build still emits build/ when Vite is also installed.
@@ -251,9 +260,23 @@ func longRunning(command string) bool {
 var envPattern = regexp.MustCompile(`process\.env\.([A-Z_][A-Z0-9_]*)\b`)
 var portPattern = regexp.MustCompile(`process\.env\.PORT\b\s*(?:,\s*10\s*)?\)*\s*(?:\|\||\?\?)\s*["']?([0-9]+)\b`)
 
-func scanSources(dir string) ([]plan.EnvVar, int, error) {
+// A literal listen(port) is weaker evidence than a process.env.PORT fallback:
+// it applies only when nothing else yields a port for a web process.
+var listenPattern = regexp.MustCompile(`\.listen\s*\(\s*([0-9]{1,5})\b`)
+var healthRoutePattern = regexp.MustCompile(`\.(?:get|route|use|all)\s*\(\s*['"` + "`" + `](/healthz?)/?['"` + "`" + `]`)
+
+// sourceScan collects source evidence in a single walk; the first valid match
+// in lexical file order wins for port, listenPort, and healthPath.
+type sourceScan struct {
+	env        []plan.EnvVar
+	port       int
+	listenPort int
+	healthPath string
+}
+
+func scanSources(dir string, framework string) (sourceScan, error) {
+	var scan sourceScan
 	names := make(map[string]bool)
-	port := 0
 	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -272,9 +295,12 @@ func scanSources(dir string) ([]plan.EnvVar, int, error) {
 			return nil
 		}
 		switch filepath.Ext(path) {
-		case ".ts", ".js", ".mjs":
+		case ".ts", ".js", ".mjs", ".cjs", ".tsx", ".jsx":
 		default:
 			return nil
+		}
+		if scan.healthPath == "" && (framework == "next" || framework == "nuxt") {
+			scan.healthPath = fileRouteHealthPath(dir, path)
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -285,21 +311,70 @@ func scanSources(dir string) ([]plan.EnvVar, int, error) {
 		}
 		for _, match := range portPattern.FindAllSubmatch(data, -1) {
 			value, err := strconv.Atoi(string(match[1]))
-			if err == nil && value > 0 && value <= 65535 && port == 0 {
-				port = value
+			if err == nil && value > 0 && value <= 65535 && scan.port == 0 {
+				scan.port = value
+			}
+		}
+		for _, match := range listenPattern.FindAllSubmatch(data, -1) {
+			value, err := strconv.Atoi(string(match[1]))
+			if err == nil && value > 0 && value <= 65535 && scan.listenPort == 0 {
+				scan.listenPort = value
+			}
+		}
+		if scan.healthPath == "" {
+			if match := healthRoutePattern.FindSubmatch(data); match != nil {
+				scan.healthPath = string(match[1])
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("scan Node sources: %w", err)
+		return sourceScan{}, fmt.Errorf("scan Node sources: %w", err)
 	}
-	var env []plan.EnvVar
 	for name := range names {
-		env = append(env, plan.EnvVar{Name: name, Required: requiredEnv(name)})
+		scan.env = append(scan.env, plan.EnvVar{Name: name, Required: requiredEnv(name)})
 	}
-	slices.SortFunc(env, func(a, b plan.EnvVar) int { return strings.Compare(a.Name, b.Name) })
-	return env, port, nil
+	slices.SortFunc(scan.env, func(a, b plan.EnvVar) int { return strings.Compare(a.Name, b.Name) })
+	return scan, nil
+}
+
+// fileRouteHealthPath maps Next and Nuxt file-based routes such as
+// app/api/health/route.ts or pages/health.tsx onto their URL path.
+func fileRouteHealthPath(dir, filename string) string {
+	rel, err := filepath.Rel(dir, filename)
+	if err != nil {
+		return ""
+	}
+	segments := strings.Split(filepath.ToSlash(rel), "/")
+	file := segments[len(segments)-1]
+	segments = segments[:len(segments)-1]
+	marker := -1
+	for i, segment := range segments {
+		if segment == "app" || segment == "pages" {
+			marker = i
+		}
+	}
+	if marker < 0 {
+		return ""
+	}
+	route := slices.Clone(segments[marker+1:])
+	stem := strings.TrimSuffix(file, filepath.Ext(file))
+	switch stem {
+	case "route", "page", "index":
+	case "health", "healthz":
+		// Only the pages router turns a file named health into a URL path;
+		// app/health.ts is an ordinary module there.
+		if segments[marker] != "pages" {
+			return ""
+		}
+		route = append(route, stem)
+	default:
+		return ""
+	}
+	if len(route) == 0 || (route[len(route)-1] != "health" && route[len(route)-1] != "healthz") {
+		return ""
+	}
+	return "/" + strings.Join(route, "/")
 }
 
 func requiredEnv(name string) bool {

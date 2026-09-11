@@ -13,6 +13,9 @@ Entry selection prefers main.py, app.py, and server.py, including src layouts.
 Application constructor assignments identify ASGI/Flask objects; Django uses
 wsgi.py. Workers use a package's __main__.py or a script. Guessed entries receive
 confidence 0.5 and a note. A missing uvicorn/gunicorn dependency also gets a note.
+A `/health` or `/healthz` route becomes the plan's health path for web
+processes; `get`, `route`, and `add_url_rule` decorators and Django `path` and
+`re_path` entries are recognized, with or without a trailing slash.
 
 The scans are heuristics, not a complete TOML or Python parser. Dynamically
 computed dependencies, app factories, aliases, version constraints without a

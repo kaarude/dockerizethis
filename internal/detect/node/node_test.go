@@ -20,7 +20,7 @@ func TestFixtures(t *testing.T) {
 			name: "node-express-pg",
 			want: plan.Plan{
 				Stack: "node", Version: "22", PkgManager: "npm", Framework: "express",
-				Process: plan.ProcessWeb, Port: 8080, Services: []plan.Service{plan.ServicePostgres},
+				Process: plan.ProcessWeb, Port: 8080, HealthPath: "/health", Services: []plan.Service{plan.ServicePostgres},
 				Env:      []plan.EnvVar{{Name: "DATABASE_URL", Required: true}, {Name: "PORT"}},
 				StartCmd: "node src/index.js", Workdir: "/app", Confidence: 1,
 				Extras: map[string]string{"lockfile": "none"},
@@ -41,7 +41,7 @@ func TestFixtures(t *testing.T) {
 			name: "node-next",
 			want: plan.Plan{
 				Stack: "node", Version: "20", PkgManager: "npm", Framework: "next",
-				Process: plan.ProcessWeb, Port: 3000, BuildCmd: "npm run build",
+				Process: plan.ProcessWeb, Port: 3000, HealthPath: "/api/health", BuildCmd: "npm run build",
 				StartCmd: "next start", Workdir: "/app", Confidence: 0.8,
 				Extras: map[string]string{"lockfile": "none"},
 				Notes:  []string{"no lockfile found; npm install is not reproducible — commit package-lock.json"},
@@ -349,6 +349,126 @@ func TestPorts(t *testing.T) {
 			require.Equal(t, tc.want, p.Port)
 		})
 	}
+}
+
+func TestListenPortFallback(t *testing.T) {
+	manifest := `{"dependencies":{"express":"*"},"scripts":{"start":"node server.js"}}`
+	for _, tc := range []struct {
+		name, source string
+		want         int
+	}{
+		{"literal", "app.listen(8080)", 8080},
+		{"literal with host", "app.listen(8081, '0.0.0.0')", 8081},
+		{"chained", "http.createServer(app).listen(8082)", 8082},
+		{"first valid wins", "socket.listen(99999)\napp.listen(8083)", 8083},
+		{"env fallback wins", "app.listen(process.env.PORT || 8084)\nother.listen(8085)", 8084},
+		{"ephemeral port ignored", "app.listen(0)", 0},
+		{"variable unresolved", "app.listen(config.port)", 0},
+		{"no listen call", "app.get('/health', h)", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := detectFiles(t, map[string]string{
+				"package.json": manifest,
+				"server.js":    tc.source,
+			})
+			require.Equal(t, plan.ProcessWeb, p.Process)
+			require.Equal(t, tc.want, p.Port)
+			if tc.want == 0 {
+				require.Contains(t, p.Notes, "could not detect a listen port; use process.env.PORT with a default or a literal .listen(port) call")
+			}
+		})
+	}
+	t.Run("workers ignore listen literals", func(t *testing.T) {
+		p := detectFiles(t, map[string]string{
+			"package.json": `{"dependencies":{"bullmq":"*"},"scripts":{"start":"node worker.js"}}`,
+			"worker.js":    "app.listen(8080)",
+		})
+		require.Equal(t, plan.ProcessWorker, p.Process)
+		require.Zero(t, p.Port)
+	})
+	t.Run("framework defaults beat listen literals", func(t *testing.T) {
+		p := detectFiles(t, map[string]string{
+			"package.json": `{"dependencies":{"next":"*"},"scripts":{"start":"next start"}}`,
+			"server.js":    "app.listen(8080)",
+		})
+		require.Equal(t, 3000, p.Port)
+	})
+}
+
+func TestHealthRoutes(t *testing.T) {
+	manifest := `{"dependencies":{"express":"*"},"scripts":{"start":"node server.js"}}`
+	for _, tc := range []struct {
+		name, source, want string
+	}{
+		{"get", "app.get('/health', h)", "/health"},
+		{"double quotes", `app.get("/health", h)`, "/health"},
+		{"trailing slash", "app.get('/health/', h)", "/health"},
+		{"healthz", "app.get('/healthz', h)", "/healthz"},
+		{"route", "app.route('/health').get(h)", "/health"},
+		{"use", "app.use('/health', h)", "/health"},
+		{"router", "router.get('/health', h)", "/health"},
+		{"nested path ignored", "app.get('/api/health', h)", ""},
+		{"longer name ignored", "app.get('/healthy', h)", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := detectFiles(t, map[string]string{
+				"package.json": manifest,
+				"server.js":    tc.source + "\napp.listen(8080)",
+			})
+			require.Equal(t, plan.ProcessWeb, p.Process)
+			require.Equal(t, tc.want, p.HealthPath)
+		})
+	}
+	t.Run("workers skip health routes", func(t *testing.T) {
+		p := detectFiles(t, map[string]string{
+			"package.json": `{"dependencies":{"bullmq":"*"},"scripts":{"start":"node worker.js"}}`,
+			"worker.js":    "app.get('/health', h)",
+		})
+		require.Equal(t, plan.ProcessWorker, p.Process)
+		require.Empty(t, p.HealthPath)
+	})
+}
+
+func TestFileRouteHealthPaths(t *testing.T) {
+	manifest := `{"dependencies":{"next":"*"},"scripts":{"start":"next start"}}`
+	for _, tc := range []struct {
+		name, file, want string
+	}{
+		{"app router", "app/api/health/route.ts", "/api/health"},
+		{"app router root", "app/health/route.js", "/health"},
+		{"app router page", "app/health/page.tsx", "/health"},
+		{"pages router", "pages/health.tsx", "/health"},
+		{"pages nested", "pages/api/healthz.ts", "/api/healthz"},
+		{"pages index", "pages/health/index.ts", "/health"},
+		{"app module is not a route", "app/health.ts", ""},
+		{"non-health route", "app/api/users/route.ts", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := detectFiles(t, map[string]string{
+				"package.json": manifest,
+				tc.file:        "export function GET() { return Response.json({status:'ok'}) }",
+			})
+			require.Equal(t, tc.want, p.HealthPath)
+		})
+	}
+	t.Run("file routes ignored without a file-router framework", func(t *testing.T) {
+		p := detectFiles(t, map[string]string{
+			"package.json":             `{"dependencies":{"express":"*"},"scripts":{"start":"node server.js"}}`,
+			"app/api/health/route.ts":  "export function GET() {}",
+			"src/app/health/route.mjs": "export function GET() {}",
+		})
+		require.Empty(t, p.HealthPath)
+	})
+}
+
+func TestCJSSourcesScanned(t *testing.T) {
+	p := detectFiles(t, map[string]string{
+		"package.json": `{"dependencies":{"express":"*"},"scripts":{"start":"node server.cjs"}}`,
+		"server.cjs":   "process.env.DATABASE_URL\napp.listen(8080)\napp.get('/health', h)",
+	})
+	require.Equal(t, 8080, p.Port)
+	require.Equal(t, "/health", p.HealthPath)
+	require.Contains(t, p.Env, plan.EnvVar{Name: "DATABASE_URL", Required: true})
 }
 
 func TestServices(t *testing.T) {

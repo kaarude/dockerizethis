@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -313,7 +314,11 @@ func printReport(out io.Writer, path string, r report, dryRun bool) error {
 	if serviceText == "" {
 		serviceText = "none"
 	}
-	fmt.Fprintf(&text, "Project: %s\nDetected: %s %s | framework: %s | process: %s\nPort: %d | services: %s | confidence: %.0f%%\n", path, p.Stack, p.Version, framework, p.Process, p.Port, serviceText, p.Confidence*100)
+	portText := "none"
+	if p.Port > 0 {
+		portText = strconv.Itoa(p.Port)
+	}
+	fmt.Fprintf(&text, "Project: %s\nDetected: %s %s | framework: %s | process: %s\nPort: %s | services: %s | confidence: %.0f%%\n", path, p.Stack, p.Version, framework, p.Process, portText, serviceText, p.Confidence*100)
 	for _, note := range p.Notes {
 		fmt.Fprintf(&text, "Note: %s\n", note)
 	}
