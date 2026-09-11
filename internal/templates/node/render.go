@@ -38,7 +38,8 @@ type renderData struct {
 }
 
 // RenderNode returns a Dockerfile, .dockerignore, and, for static sites, nginx.conf.
-// Extras["lockfile"] overrides the package manager's default lockfile name.
+// Extras["lockfile"] overrides the package manager's default lockfile name;
+// "none" means no lockfile exists, so npm installs without one.
 // Extras["staticDir"] selects the static output directory, defaulting to dist.
 // Distroless requires a major Node version and a direct node command;
 // shell expressions and package-manager start scripts need the Alpine runtime.
@@ -113,10 +114,15 @@ func prepare(p plan.Plan) (renderData, error) {
 		supported := lockfile == d.Lockfile ||
 			(p.PkgManager == "npm" && lockfile == "npm-shrinkwrap.json") ||
 			(p.PkgManager == "bun" && lockfile == "bun.lock")
-		if !supported {
+		switch {
+		case lockfile == "none" && p.PkgManager == "npm":
+			// No lockfile exists: nothing to COPY and npm ci cannot run.
+			d.Lockfile, d.InstallCmd = "", "npm install"
+		case supported:
+			d.Lockfile = lockfile
+		default:
 			return d, fmt.Errorf("lockfile %q is not supported by %s", lockfile, p.PkgManager)
 		}
-		d.Lockfile = lockfile
 	}
 	if p.BuildCmd != "" && (!singleLine(p.BuildCmd) || strings.TrimSpace(p.BuildCmd) == "" || strings.HasSuffix(strings.TrimSpace(p.BuildCmd), "\\")) {
 		return d, fmt.Errorf("build command must be a nonempty single line without a trailing backslash")

@@ -102,6 +102,21 @@ func TestPackageManagers(t *testing.T) {
 			require.Contains(t, dockerfile, "RUN NODE_ENV=development "+tc.command+"\n")
 		})
 	}
+	t.Run("npm without a lockfile", func(t *testing.T) {
+		p := webPlan()
+		p.Extras["lockfile"] = "none"
+		files, err := node.RenderNode(p)
+		require.NoError(t, err)
+		dockerfile := artifact(t, files, "Dockerfile")
+		require.Contains(t, dockerfile, "COPY package.json ./\n")
+		require.Contains(t, dockerfile, "RUN NODE_ENV=development npm install\n")
+	})
+	t.Run("none is npm-only", func(t *testing.T) {
+		p := webPlan()
+		p.PkgManager, p.Extras["lockfile"] = "pnpm", "none"
+		_, err := node.RenderNode(p)
+		require.ErrorContains(t, err, "lockfile")
+	})
 }
 
 func TestRenderNodeBehavior(t *testing.T) {
@@ -136,6 +151,19 @@ func TestRenderNodeBehavior(t *testing.T) {
 					require.Contains(t, strings.Split(ignore, "\n"), pattern)
 				}
 				require.Equal(t, build != "", strings.Contains(dockerfile, "RUN npm run build\n"))
+
+				custom := webPlan()
+				custom.Process, custom.BuildCmd = process, build
+				custom.Extras["staticDir"] = "out"
+				customFiles, err := node.RenderNode(custom)
+				require.NoError(t, err)
+				customIgnore := artifact(t, customFiles, ".dockerignore")
+				if process == plan.ProcessStatic && build != "" {
+					require.Contains(t, customIgnore, "\nout\n", "the configured static output directory is ignored")
+					require.NotContains(t, customIgnore, "\ndist\n")
+				} else {
+					require.NotContains(t, customIgnore, "\nout\n")
+				}
 			})
 		}
 	}

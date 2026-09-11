@@ -97,6 +97,7 @@ import MySQLdb
 """os.getenv('IGNORED_DOCSTRING')"""
 a = os.environ["DATABASE_URL"]
 b = os.getenv('REDIS_URL')
+e = os.environ.get("MONGO_URI")
 c = os.getenv('DATABASE_URL')
 d = os.getenv('OPTIONAL', 'default')
 `)
@@ -109,7 +110,7 @@ d = os.getenv('OPTIONAL', 'default')
 	require.True(t, ok)
 	require.Equal(t, plan.Plan{Stack: "python", Version: "3.12", PkgManager: "pip", Process: plan.ProcessWorker,
 		Services: []plan.Service{plan.ServiceMongo, plan.ServiceMySQL, plan.ServicePostgres, plan.ServiceRedis},
-		Env:      []plan.EnvVar{{Name: "DATABASE_URL", Required: true}, {Name: "OPTIONAL"}, {Name: "REDIS_URL", Required: true}}, StartCmd: "python worker.py", Workdir: "/app", Confidence: 0.5, Extras: map[string]string{"pipSource": "setup.py"}, Notes: []string{"entry point guessed as worker.py; confirm the start command"}}, p)
+		Env:      []plan.EnvVar{{Name: "DATABASE_URL", Required: true}, {Name: "MONGO_URI", Required: true}, {Name: "OPTIONAL"}, {Name: "REDIS_URL", Required: true}}, StartCmd: "python worker.py", Workdir: "/app", Confidence: 0.5, Extras: map[string]string{"pipSource": "setup.py"}, Notes: []string{"entry point guessed as worker.py; confirm the start command"}}, p)
 	write(t, dir, "requirements.txt", "fastapi\ncelery\n")
 	p, _, err = (python.Detector{}).Detect(dir)
 	require.NoError(t, err)

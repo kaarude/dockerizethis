@@ -23,6 +23,8 @@ func TestFixtures(t *testing.T) {
 				Process: plan.ProcessWeb, Port: 8080, Services: []plan.Service{plan.ServicePostgres},
 				Env:      []plan.EnvVar{{Name: "DATABASE_URL", Required: true}, {Name: "PORT"}},
 				StartCmd: "node src/index.js", Workdir: "/app", Confidence: 1,
+				Extras: map[string]string{"lockfile": "none"},
+				Notes:  []string{"no lockfile found; npm install is not reproducible — commit package-lock.json"},
 			},
 		},
 		{
@@ -31,6 +33,8 @@ func TestFixtures(t *testing.T) {
 				Stack: "node", Version: "20", PkgManager: "npm", Process: plan.ProcessWorker,
 				Env:      []plan.EnvVar{{Name: "DISCORD_TOKEN", Required: true}},
 				StartCmd: "node worker.mjs", Workdir: "/app", Confidence: 0.9,
+				Extras: map[string]string{"lockfile": "none"},
+				Notes:  []string{"no lockfile found; npm install is not reproducible — commit package-lock.json"},
 			},
 		},
 		{
@@ -39,6 +43,8 @@ func TestFixtures(t *testing.T) {
 				Stack: "node", Version: "20", PkgManager: "npm", Framework: "next",
 				Process: plan.ProcessWeb, Port: 3000, BuildCmd: "npm run build",
 				StartCmd: "next start", Workdir: "/app", Confidence: 0.8,
+				Extras: map[string]string{"lockfile": "none"},
+				Notes:  []string{"no lockfile found; npm install is not reproducible — commit package-lock.json"},
 			},
 		},
 	} {
@@ -193,8 +199,8 @@ func TestProcessesAndFrameworks(t *testing.T) {
 		{"telegraf", "node bot.js", "", "", plan.ProcessWorker, 0},
 		{"bullmq", "node queue.js", "", "", plan.ProcessWorker, 0},
 		{"vite", "vite preview", "vite build", "", plan.ProcessStatic, 4173},
-		{"react-scripts", "react-scripts start", "react-scripts build", "", plan.ProcessStatic, 0},
-		{"astro", "astro preview", "astro build", "astro", plan.ProcessStatic, 0},
+		{"react-scripts", "react-scripts start", "react-scripts build", "", plan.ProcessStatic, 8080},
+		{"astro", "astro preview", "astro build", "astro", plan.ProcessStatic, 8080},
 		{"astro", "", "", "astro", "", 0},
 		{"express", "", "", "express", "", 0},
 		{"", "node worker.js", "", "", plan.ProcessWorker, 0},
@@ -231,6 +237,16 @@ func TestProcessesAndFrameworks(t *testing.T) {
 	t.Run("dev dependencies count", func(t *testing.T) {
 		p := detectFiles(t, map[string]string{"package.json": `{"devDependencies":{"vite":"*"},"scripts":{"build":"vite build"}}`})
 		require.Equal(t, plan.ProcessStatic, p.Process)
+	})
+	t.Run("react-scripts builds to build", func(t *testing.T) {
+		p := detectFiles(t, map[string]string{"package.json": `{"dependencies":{"react-scripts":"*"},"scripts":{"start":"react-scripts start","build":"react-scripts build"}}`})
+		require.Equal(t, "build", p.Extras["staticDir"])
+	})
+	t.Run("vite config wins over react-scripts", func(t *testing.T) {
+		p := detectFiles(t, map[string]string{"package.json": `{"dependencies":{"react-scripts":"*"},"devDependencies":{"vite":"*"},"scripts":{"build":"vite build"}}`})
+		require.Equal(t, plan.ProcessStatic, p.Process)
+		require.Equal(t, 4173, p.Port)
+		require.Empty(t, p.Extras["staticDir"])
 	})
 	t.Run("worker with build tooling has no preview port", func(t *testing.T) {
 		p := detectFiles(t, map[string]string{"package.json": `{"dependencies":{"bullmq":"*"},"devDependencies":{"vite":"*"},"scripts":{"start":"node worker.js","build":"vite build"}}`})

@@ -75,6 +75,15 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 	if err != nil {
 		return plan.Plan{}, false, err
 	}
+	if lockfile == "" {
+		// "none" tells the renderer there is no lockfile to COPY; only npm
+		// can install without one.
+		if p.Extras == nil {
+			p.Extras = map[string]string{}
+		}
+		p.Extras["lockfile"] = "none"
+		p.Notes = append(p.Notes, "no lockfile found; npm install is not reproducible — commit package-lock.json")
+	}
 	p.Version, versioned, err = nodeVersion(dir, m.Engines.Node)
 	if err != nil {
 		return plan.Plan{}, false, err
@@ -128,7 +137,18 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 			p.Port = 3000
 		case p.Process == plan.ProcessStatic && m.has("vite"):
 			p.Port = 4173
+		case p.Process == plan.ProcessStatic:
+			// The generated runtime is nginx, which needs a valid listen port.
+			p.Port = 8080
 		}
+	}
+	// react-scripts emits build/ instead of Vite's and Astro's dist/. A vite
+	// config wins because the project can still produce dist/.
+	if p.Process == plan.ProcessStatic && m.has("react-scripts") && !m.has("vite") {
+		if p.Extras == nil {
+			p.Extras = map[string]string{}
+		}
+		p.Extras["staticDir"] = "build"
 	}
 	p.Services = services(*m, p.Env)
 	if m.has("prisma", "@prisma/client") {

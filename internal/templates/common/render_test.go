@@ -174,6 +174,7 @@ func TestRenderAction(t *testing.T) {
 		"docker/build-push-action@v6",
 		"REGISTRY: ghcr.io",
 		"IMAGE_NAME: ${{ github.repository }}",
+		`echo "IMAGE_NAME=${IMAGE_NAME,,}"`,
 		"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}",
 		"${{ secrets.GITHUB_TOKEN }}",
 		"packages: write",
