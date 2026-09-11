@@ -30,7 +30,7 @@ var (
 	dependencyPattern = regexp.MustCompile(`(?m)(?:^\s*|["'])([A-Za-z][A-Za-z0-9_.-]*)(?:\[|[<>=!~; @"']|\s*$)`)
 	modulePattern     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$`)
 	appPattern        = regexp.MustCompile(`(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]+)?=\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?(FastAPI|Flask|Starlette)\s*\(`)
-	healthPattern     = regexp.MustCompile(`(?:\.(?:get|route|add_url_rule)\s*\(\s*["']/|\b(?:re_)?path\s*\(\s*["']/?)(healthz?)/?["']`)
+	healthPattern     = regexp.MustCompile(`(?:\.(?:get|route|add_url_rule)\s*\(\s*["']/|\bpath\s*\(\s*["']/?)(healthz?/?)["']|\bre_path\s*\(\s*r?["']\^?/?(healthz?/?)(?:\$)?["']`)
 )
 
 func (Detector) Detect(dir string) (plan.Plan, bool, error) {
@@ -208,7 +208,11 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 	if p.Process == plan.ProcessWeb {
 		for _, name := range slices.Sorted(maps.Keys(sources)) {
 			if match := healthPattern.FindStringSubmatch(sources[name]); match != nil {
-				p.HealthPath = "/" + match[1]
+				healthPath := match[1]
+				if healthPath == "" {
+					healthPath = match[2]
+				}
+				p.HealthPath = "/" + healthPath
 				break
 			}
 		}

@@ -125,11 +125,14 @@ func TestHealthPathSpellings(t *testing.T) {
 		name, code, want string
 	}{
 		{"django path", `path("health", health)`, "/health"},
-		{"django trailing slash", `path("health/", health)`, "/health"},
-		{"django re_path", `re_path("health/", health)`, "/health"},
-		{"django leading slash", `path("/health/", health)`, "/health"},
+		{"django trailing slash", `path("health/", health)`, "/health/"},
+		{"django anchored raw regex", `re_path(r"^health/$", health)`, "/health/"},
+		{"django anchored healthz", `re_path(r"^healthz$", health)`, "/healthz"},
+		{"django dynamic regex ignored", `re_path(r"^health/.*$", health)`, ""},
+		{"django re_path", `re_path("health/", health)`, "/health/"},
+		{"django leading slash", `path("/health/", health)`, "/health/"},
 		{"fastapi get", `@app.get("/health")`, "/health"},
-		{"fastapi trailing slash", `@app.get("/health/")`, "/health"},
+		{"fastapi trailing slash", `@app.get("/health/")`, "/health/"},
 		{"healthz", `@app.get("/healthz")`, "/healthz"},
 		{"flask route", `@app.route('/health')`, "/health"},
 		{"flask add_url_rule", `app.add_url_rule("/health", "health", health)`, "/health"},

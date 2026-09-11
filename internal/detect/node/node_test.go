@@ -359,7 +359,7 @@ func TestListenPortFallback(t *testing.T) {
 	}{
 		{"literal", "app.listen(8080)", 8080},
 		{"literal with host", "app.listen(8081, '0.0.0.0')", 8081},
-		{"chained", "http.createServer(app).listen(8082)", 8082},
+		{"unresolved HTTP wrapper", "http.createServer(app).listen(8082)", 0},
 		{"first valid wins", "socket.listen(99999)\napp.listen(8083)", 8083},
 		{"env fallback wins", "app.listen(process.env.PORT || 8084)\nother.listen(8085)", 8084},
 		{"ephemeral port ignored", "app.listen(0)", 0},
@@ -369,7 +369,7 @@ func TestListenPortFallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := detectFiles(t, map[string]string{
 				"package.json": manifest,
-				"server.js":    tc.source,
+				"server.js":    "const express = require(\"express\"); const app = express();\n" + tc.source,
 			})
 			require.Equal(t, plan.ProcessWeb, p.Process)
 			require.Equal(t, tc.want, p.Port)
@@ -402,18 +402,18 @@ func TestHealthRoutes(t *testing.T) {
 	}{
 		{"get", "app.get('/health', h)", "/health"},
 		{"double quotes", `app.get("/health", h)`, "/health"},
-		{"trailing slash", "app.get('/health/', h)", "/health"},
+		{"trailing slash", "app.get('/health/', h)", "/health/"},
 		{"healthz", "app.get('/healthz', h)", "/healthz"},
-		{"route", "app.route('/health').get(h)", "/health"},
-		{"use", "app.use('/health', h)", "/health"},
-		{"router", "router.get('/health', h)", "/health"},
+		{"route", "app.route('/health').get(h)", ""},
+		{"use", "app.use('/health', h)", ""},
+		{"router", "router.get('/health', h)", ""},
 		{"nested path ignored", "app.get('/api/health', h)", ""},
 		{"longer name ignored", "app.get('/healthy', h)", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := detectFiles(t, map[string]string{
 				"package.json": manifest,
-				"server.js":    tc.source + "\napp.listen(8080)",
+				"server.js":    "const express = require(\"express\"); const app = express();\n" + tc.source + "\napp.listen(8080)",
 			})
 			require.Equal(t, plan.ProcessWeb, p.Process)
 			require.Equal(t, tc.want, p.HealthPath)
@@ -436,17 +436,26 @@ func TestFileRouteHealthPaths(t *testing.T) {
 	}{
 		{"app router", "app/api/health/route.ts", "/api/health"},
 		{"app router root", "app/health/route.js", "/health"},
+		{"unsupported route extension", "app/health/route.jsx", ""},
 		{"app router page", "app/health/page.tsx", "/health"},
 		{"pages router", "pages/health.tsx", "/health"},
 		{"pages nested", "pages/api/healthz.ts", "/api/healthz"},
 		{"pages index", "pages/health/index.ts", "/health"},
+		{"route group", "app/(ops)/health/route.ts", "/health"},
+		{"src route", "src/app/api/health/route.ts", "/api/health"},
+		{"nested app segment", "app/app/health/route.ts", "/app/health"},
+		{"unrelated directory", "lib/app/health/route.ts", ""},
+		{"private route", "app/_ops/health/route.ts", ""},
+		{"dynamic route", "app/[tenant]/health/route.ts", ""},
+		{"parallel route", "app/@ops/health/route.ts", ""},
+		{"intercepted route", "app/(.)ops/health/route.ts", ""},
 		{"app module is not a route", "app/health.ts", ""},
 		{"non-health route", "app/api/users/route.ts", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := detectFiles(t, map[string]string{
 				"package.json": manifest,
-				tc.file:        "export function GET() { return Response.json({status:'ok'}) }",
+				tc.file:        "export default function Page() {}\nexport function GET() { return Response.json({status:'ok'}) }",
 			})
 			require.Equal(t, tc.want, p.HealthPath)
 		})
@@ -464,7 +473,7 @@ func TestFileRouteHealthPaths(t *testing.T) {
 func TestCJSSourcesScanned(t *testing.T) {
 	p := detectFiles(t, map[string]string{
 		"package.json": `{"dependencies":{"express":"*"},"scripts":{"start":"node server.cjs"}}`,
-		"server.cjs":   "process.env.DATABASE_URL\napp.listen(8080)\napp.get('/health', h)",
+		"server.cjs":   "const app = require('express')();\napp.listen(8080);\napp.get('/health', h);\nprocess.env.DATABASE_URL",
 	})
 	require.Equal(t, 8080, p.Port)
 	require.Equal(t, "/health", p.HealthPath)

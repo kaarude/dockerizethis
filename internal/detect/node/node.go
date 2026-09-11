@@ -127,7 +127,7 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		p.Notes = append(p.Notes, "no start script or main field; provide a start command")
 	}
 
-	scan, err := scanSources(dir, p.Framework)
+	scan, err := scanSources(dir, p.Framework, *m)
 	if err != nil {
 		return plan.Plan{}, false, err
 	}
@@ -260,13 +260,7 @@ func longRunning(command string) bool {
 var envPattern = regexp.MustCompile(`process\.env\.([A-Z_][A-Z0-9_]*)\b`)
 var portPattern = regexp.MustCompile(`process\.env\.PORT\b\s*(?:,\s*10\s*)?\)*\s*(?:\|\||\?\?)\s*["']?([0-9]+)\b`)
 
-// A literal listen(port) is weaker evidence than a process.env.PORT fallback:
-// it applies only when nothing else yields a port for a web process.
-var listenPattern = regexp.MustCompile(`\.listen\s*\(\s*([0-9]{1,5})\b`)
-var healthRoutePattern = regexp.MustCompile(`\.(?:get|route|use|all)\s*\(\s*['"` + "`" + `](/healthz?)/?['"` + "`" + `]`)
-
-// sourceScan collects source evidence in a single walk; the first valid match
-// in lexical file order wins for port, listenPort, and healthPath.
+// sourceScan collects source evidence without executing the project.
 type sourceScan struct {
 	env        []plan.EnvVar
 	port       int
@@ -274,16 +268,17 @@ type sourceScan struct {
 	healthPath string
 }
 
-func scanSources(dir string, framework string) (sourceScan, error) {
+func scanSources(dir string, framework string, m manifest) (sourceScan, error) {
 	var scan sourceScan
 	names := make(map[string]bool)
+	entryPoint := sourceEntryPoint(m)
 	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if entry.IsDir() {
 			switch entry.Name() {
-			case "node_modules", "dist", "build", ".git":
+			case "node_modules", "dist", "build", ".git", ".next", ".nuxt", ".output", "coverage", "test", "tests", "__tests__", "__mocks__", "fixtures", "examples":
 				if path != dir {
 					return filepath.SkipDir
 				}
@@ -294,13 +289,13 @@ func scanSources(dir string, framework string) (sourceScan, error) {
 		if !entry.Type().IsRegular() {
 			return nil
 		}
-		switch filepath.Ext(path) {
-		case ".ts", ".js", ".mjs", ".cjs", ".tsx", ".jsx":
-		default:
+		if strings.Contains(entry.Name(), ".test.") || strings.Contains(entry.Name(), ".spec.") {
 			return nil
 		}
-		if scan.healthPath == "" && (framework == "next" || framework == "nuxt") {
-			scan.healthPath = fileRouteHealthPath(dir, path)
+		switch filepath.Ext(path) {
+		case ".ts", ".js", ".mjs", ".cjs", ".tsx", ".jsx", ".vue":
+		default:
+			return nil
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -315,16 +310,11 @@ func scanSources(dir string, framework string) (sourceScan, error) {
 				scan.port = value
 			}
 		}
-		for _, match := range listenPattern.FindAllSubmatch(data, -1) {
-			value, err := strconv.Atoi(string(match[1]))
-			if err == nil && value > 0 && value <= 65535 && scan.listenPort == 0 {
-				scan.listenPort = value
-			}
+		if rel, err := filepath.Rel(dir, path); err == nil && filepath.ToSlash(rel) == entryPoint && filepath.Ext(path) != ".tsx" && filepath.Ext(path) != ".jsx" {
+			scan.listenPort, scan.healthPath = directWebCalls(string(data), framework)
 		}
 		if scan.healthPath == "" {
-			if match := healthRoutePattern.FindSubmatch(data); match != nil {
-				scan.healthPath = string(match[1])
-			}
+			scan.healthPath = fileRouteHealthPath(dir, path, framework, string(data))
 		}
 		return nil
 	})
@@ -338,43 +328,20 @@ func scanSources(dir string, framework string) (sourceScan, error) {
 	return scan, nil
 }
 
-// fileRouteHealthPath maps Next and Nuxt file-based routes such as
-// app/api/health/route.ts or pages/health.tsx onto their URL path.
-func fileRouteHealthPath(dir, filename string) string {
-	rel, err := filepath.Rel(dir, filename)
-	if err != nil {
-		return ""
-	}
-	segments := strings.Split(filepath.ToSlash(rel), "/")
-	file := segments[len(segments)-1]
-	segments = segments[:len(segments)-1]
-	marker := -1
-	for i, segment := range segments {
-		if segment == "app" || segment == "pages" {
-			marker = i
-		}
-	}
-	if marker < 0 {
-		return ""
-	}
-	route := slices.Clone(segments[marker+1:])
-	stem := strings.TrimSuffix(file, filepath.Ext(file))
-	switch stem {
-	case "route", "page", "index":
-	case "health", "healthz":
-		// Only the pages router turns a file named health into a URL path;
-		// app/health.ts is an ordinary module there.
-		if segments[marker] != "pages" {
+// Only direct node startup commands identify a runtime file without executing a shell.
+func sourceEntryPoint(m manifest) string {
+	entry := m.Main
+	if m.Scripts["start"] != "" {
+		args := strings.Fields(m.Scripts["start"])
+		if len(args) != 2 || args[0] != "node" {
 			return ""
 		}
-		route = append(route, stem)
-	default:
+		entry = args[1]
+	}
+	if filepath.IsAbs(entry) {
 		return ""
 	}
-	if len(route) == 0 || (route[len(route)-1] != "health" && route[len(route)-1] != "healthz") {
-		return ""
-	}
-	return "/" + strings.Join(route, "/")
+	return filepath.ToSlash(filepath.Clean(entry))
 }
 
 func requiredEnv(name string) bool {

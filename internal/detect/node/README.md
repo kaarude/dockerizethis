@@ -21,21 +21,32 @@ reads project files without installing dependencies or executing scripts.
 - `scripts.start` becomes `StartCmd`; `main` supplies a quoted `node` command
   when no start script exists. A build script yields `npm run build`.
   Unclear processes and missing start commands produce notes.
-- Source scanning covers `.ts`, `.js`, `.mjs`, `.cjs`, `.tsx`, and `.jsx`. It
-  skips `node_modules`, `dist`, `build`, and `.git` directories at any depth,
-  plus source symlinks. Environment names are deduplicated and sorted. Database
-  connection variables and common credential names are marked required; `PORT`
-  and `NODE_ENV` are not.
-- A numeric fallback beside `process.env.PORT` supplies the port. Otherwise
-  Next and Nuxt use 3000, Vite static projects use 4173, other static projects
-  use 8080 (the generated nginx runtime), and other web processes fall back to
-  a literal `.listen(port)` call. Remaining projects use 0, and a web process
-  still at 0 gets a note; rendering requires a valid port.
-  With multiple fallbacks, the first valid one in lexical file order wins.
-  The scan does not evaluate JavaScript or resolve arbitrary variable assignments.
-- A `/health` or `/healthz` route (`app.get`, `app.route`, `app.use`) becomes
-  the plan's health path for web processes. Next and Nuxt file routes such as
-  `app/api/health/route.ts` or `pages/health.tsx` are recognized as well.
+- Source scanning covers `.ts`, `.js`, `.mjs`, `.cjs`, `.tsx`, `.jsx`, and `.vue`.
+  It skips dependency/build directories, tests, examples, fixtures, and source
+  symlinks. Environment names are deduplicated and sorted. Database connection
+  variables and common credential names are marked required; `PORT` and
+  `NODE_ENV` are not.
+- The existing `process.env.PORT` fallback scan supplies the port first.
+  Next and Nuxt otherwise use 3000, Vite static projects use 4173, and other
+  static projects use 8080. This environment scan is still a text heuristic.
+- Literal listen ports and direct GET health routes are inferred only in the
+  file named by a plain `node <file>` start command, or `main` when no start
+  script exists. A single top-level `const` app must come from an Express,
+  Fastify, or Koa import/require and an empty constructor call. Koa supplies
+  listen ports only. Numeric expressions, conflicting ports, imported routers,
+  wrapper servers, middleware, and nested calls are not resolved.
+  Comments and strings cannot supply calls. Regex/division syntax, interpolated
+  templates, or non-ASCII code outside literals disable this inference for the
+  file. JSX/TSX startup files are skipped. An unresolved web port stays at 0,
+  with a note; rendering still requires a valid port.
+- Direct GET routes preserve `/health`, `/healthz`, and their trailing slashes.
+  Conventional Next `app`/`pages` roots, including `src`, map to literal URL
+  paths. Route groups are omitted; dynamic, private, parallel, and intercepted
+  paths are skipped. App route handlers need an explicit GET export; pages
+  need a default export. Nuxt recognizes GET or method-independent handlers
+  under `server/api` and `server/routes`, plus Vue pages. Custom routing config,
+  base paths, authentication, and handler responses are not evaluated. A
+  detected health URL is a candidate that still needs runtime verification.
 - A static project with an explicit `react-scripts build` command, or with
   react-scripts installed without Vite, records
   `Extras["staticDir"]="build"`, matching the `react-scripts build` output
