@@ -137,3 +137,25 @@ func write(t *testing.T, dir, name, data string) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(filename), 0o755))
 	require.NoError(t, os.WriteFile(filename, []byte(data), 0o644))
 }
+
+func TestLiteralHTTPListenPort(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		port         int
+	}{
+		{"http", `package main; import h "net/http"; func main(){ h.ListenAndServe(":9090", nil) }`, 9090},
+		{"https", `package main; import "net/http"; func main(){ http.ListenAndServeTLS("0.0.0.0:8443", "cert", "key", nil) }`, 8443},
+		{"dynamic address", `package main; import "net/http"; func main(){ http.ListenAndServe(address(), nil) }`, 8080},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			write(t, dir, "go.mod", "module example.com/test\ngo 1.23\n")
+			write(t, dir, "main.go", tc.source)
+			p, ok, err := (golang.Detector{}).Detect(dir)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, plan.ProcessWeb, p.Process)
+			require.Equal(t, tc.port, p.Port)
+		})
+	}
+}

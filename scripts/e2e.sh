@@ -10,7 +10,6 @@ trap 'rm -rf "$tmp"' EXIT
 go build -o "$tmp/dockerizethis" ./cmd/dockerizethis
 
 found=0
-skipped=0
 failed=0
 for fixture in testdata/fixtures/*/; do
     [ -d "$fixture" ] || continue
@@ -25,11 +24,6 @@ for fixture in testdata/fixtures/*/; do
         failed=$((failed + 1))
         continue
     fi
-    if printf '%s' "$output" | grep -q "Pipeline not implemented"; then
-        echo "SKIP $name: CLI pipeline not wired yet"
-        skipped=$((skipped + 1))
-        continue
-    fi
     for artifact in Dockerfile .dockerignore; do
         if [ ! -f "$work/$artifact" ]; then
             echo "FAIL $name: $artifact not emitted" >&2
@@ -40,10 +34,11 @@ for fixture in testdata/fixtures/*/; do
 done
 
 if [ "$found" -eq 0 ]; then
-    echo "no fixtures found under testdata/fixtures/"
+    echo "no fixtures found under testdata/fixtures/" >&2
+    exit 1
 fi
 if [ "$failed" -gt 0 ]; then
     echo "$failed fixture(s) failed" >&2
     exit 1
 fi
-echo "e2e: $found fixture(s) checked, $skipped skipped"
+echo "e2e: $found fixture(s) checked"

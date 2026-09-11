@@ -156,6 +156,9 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 				}
 			}
 			if f.Name.Name == "main" {
+				if port == 0 && len(call.Args) > 0 && (callIs(call, aliases, "net/http", "ListenAndServe") || callIs(call, aliases, "net/http", "ListenAndServeTLS")) {
+					port = literalPort(call.Args[0])
+				}
 				if callIs(call, aliases, "net/http", "ListenAndServe") || callIs(call, aliases, "net/http", "ListenAndServeTLS") || callIs(call, aliases, "net/http", "Serve") || callIs(call, aliases, "net/http", "ServeTLS") {
 					web = true
 				}

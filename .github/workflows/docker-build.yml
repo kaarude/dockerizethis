@@ -45,6 +45,9 @@ jobs:
         run: |
           work=$(mktemp -d)
           cp -R "testdata/fixtures/${{ matrix.fixture }}/." "$work/"
-          ./dockerizethis --yes --verify=build "$work"
+          ./dockerizethis --yes --verify=build --json "$work" > "$work/report.json"
+          test -s "$work/Dockerfile"
+          test -s "$work/.dockerignore"
+          jq -e '.verify.status == "passed" and (.verify.build.image | type == "string" and length > 0)' "$work/report.json"
         env:
           GOTOOLCHAIN: auto

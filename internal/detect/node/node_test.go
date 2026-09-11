@@ -395,3 +395,9 @@ func TestServices(t *testing.T) {
 		})
 	}
 }
+
+func TestReactScriptsBuildWithViteDependency(t *testing.T) {
+	p := detectFiles(t, map[string]string{"package.json": `{"dependencies":{"react-scripts":"*"},"devDependencies":{"vite":"*"},"scripts":{"build":"react-scripts build"}}`})
+	require.Equal(t, plan.ProcessStatic, p.Process)
+	require.Equal(t, "build", p.Extras["staticDir"])
+}

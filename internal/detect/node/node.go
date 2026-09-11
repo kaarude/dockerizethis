@@ -142,9 +142,10 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 			p.Port = 8080
 		}
 	}
-	// react-scripts emits build/ instead of Vite's and Astro's dist/. A vite
-	// config wins because the project can still produce dist/.
-	if p.Process == plan.ProcessStatic && m.has("react-scripts") && !m.has("vite") {
+	// An explicit react-scripts build still emits build/ when Vite is also installed.
+	buildFields := strings.Fields(m.Scripts["build"])
+	reactScriptsBuild := len(buildFields) >= 2 && buildFields[0] == "react-scripts" && buildFields[1] == "build"
+	if p.Process == plan.ProcessStatic && m.has("react-scripts") && (!m.has("vite") || reactScriptsBuild) {
 		if p.Extras == nil {
 			p.Extras = map[string]string{}
 		}
