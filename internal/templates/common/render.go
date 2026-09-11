@@ -88,8 +88,8 @@ func render(name, path string, p plan.Plan) (emit.File, error) {
 // ${VAR} references from the project's own .env, and env_file is listed only
 // when the plan declares variables.
 func RenderCompose(p plan.Plan) (emit.File, error) {
-	if p.Process == plan.ProcessWeb && (p.Port < 1 || p.Port > 65535) {
-		return emit.File{}, fmt.Errorf("render compose: web port must be between 1 and 65535")
+	if (p.Process == plan.ProcessWeb || p.Process == plan.ProcessStatic) && (p.Port < 1 || p.Port > 65535) {
+		return emit.File{}, fmt.Errorf("render compose: web/static port must be between 1 and 65535")
 	}
 	return render("compose.yml.tmpl", "docker-compose.yml", p)
 }

@@ -151,17 +151,28 @@ func TestComposeUnknownValues(t *testing.T) {
 }
 
 func TestComposeInvalidPort(t *testing.T) {
-	for _, port := range []int{0, -1, 65536} {
-		p := webPlan()
-		p.Port = port
-		file, err := common.RenderCompose(p)
-		require.ErrorContains(t, err, "port")
-		require.Equal(t, emit.File{}, file)
+	for _, process := range []plan.ProcessType{plan.ProcessWeb, plan.ProcessStatic} {
+		for _, port := range []int{0, -1, 65536} {
+			p := webPlan()
+			p.Process, p.Port = process, port
+			file, err := common.RenderCompose(p)
+			require.ErrorContains(t, err, "port")
+			require.Equal(t, emit.File{}, file)
+		}
 	}
 	p := webPlan()
 	p.Process, p.Port = plan.ProcessWorker, 0
 	_, err := common.RenderCompose(p)
 	require.NoError(t, err, "workers publish no port, so an unset port is valid")
+}
+
+func TestComposeStaticPublishesPort(t *testing.T) {
+	p := webPlan()
+	p.Process, p.Port = plan.ProcessStatic, 8080
+	file, err := common.RenderCompose(p)
+	require.NoError(t, err)
+	require.Contains(t, string(file.Content), `      - "8080:8080"`+"\n",
+		"static sites run nginx in the container and need a published port")
 }
 
 func TestRenderAction(t *testing.T) {
