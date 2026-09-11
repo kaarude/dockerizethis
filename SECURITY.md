@@ -2,13 +2,13 @@
 
 ## Reporting a vulnerability
 
-A private reporting channel has not been configured yet. Contact the maintainer
-through their [GitHub profile](https://github.com/kaarude) to arrange a private
-channel before sharing vulnerability details. Do not put exploit details or
-secrets in a public issue.
+Report vulnerabilities privately through [GitHub security
+advisories](https://github.com/kaarude/dockerizethis/security/advisories/new)
+("Report a vulnerability" on the repository's Security tab). Do not put exploit
+details or secrets in a public issue.
 
-Once a private channel is available, include the affected commit, reproduction
-steps, and the impact you observed.
+Include the affected commit or release, reproduction steps, and the impact you
+observed.
 
 ## What dockerizethis does with secrets
 

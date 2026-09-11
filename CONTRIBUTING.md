@@ -20,14 +20,15 @@ exercise the verification step end to end.
 
 ## Checks before a change
 
-Run the same commands CI runs:
+Run the same commands CI runs — `scripts/test.sh` covers all of them:
 
 ```sh
-go build ./...
-go vet ./...
-go test ./...
-golangci-lint run
+scripts/test.sh
 ```
+
+which is `go vet ./...` plus `go test ./...`, plus `golangci-lint run` when the
+binary is installed. `scripts/e2e.sh` additionally builds the CLI and runs it
+against every fixture under `testdata/fixtures/`.
 
 For CLI changes, also confirm the help text and the command path you touched:
 
@@ -68,11 +69,14 @@ A stack is a detector plus templates plus a fixture. To add one:
    health path, build and start commands, env vars, and any backing services. Keep
    detection read-only and never error on a project that simply does not match.
 2. Register the detector in the detector list the CLI walks.
-3. Add templates for every artifact: `Dockerfile`, `.dockerignore`, `compose.yaml`,
-   `.env.example`, the CI workflow, and deploy notes. Templates live beside the code
-   that renders them.
-4. Add a fixture project under the package's `testdata/` directory. Keep it small: the
-   marker files and just enough source for detection to be realistic.
+3. Add templates for the stack-specific artifacts: `Dockerfile` and
+   `.dockerignore`. Templates live beside the code that renders them under
+   `internal/templates/<stack>/`. Stack-independent artifacts —
+   `docker-compose.yml`, the GHCR workflow, `DEPLOY.md`, and `.env.example` —
+   come from `internal/templates/common` and `internal/emit`.
+4. Add a fixture project under `testdata/fixtures/`. Keep it small: the marker
+   files and just enough source for detection to be realistic. The e2e script
+   and the docker-build workflow pick it up automatically.
 5. Add a golden test. Run detect and emit against the fixture into a temp directory, then
    compare each artifact with the file under `testdata/golden/`. Add an update flag
    (commonly `-update`) so a maintainer can regenerate goldens after an intended change.
