@@ -120,7 +120,7 @@ func (res *SmokeResult) poll(ctx context.Context) error {
 			if resp, err := client.Do(req); err == nil {
 				res.StatusCode = resp.StatusCode
 				_, _ = io.Copy(io.Discard, resp.Body)
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				if resp.StatusCode < 500 {
 					res.OK = true
 					return nil
