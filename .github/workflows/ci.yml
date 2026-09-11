@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.23"
+          cache: true
+      - name: Build
+        run: go build ./...
+        env:
+          GOTOOLCHAIN: auto
+      - name: Vet
+        run: go vet ./...
+        env:
+          GOTOOLCHAIN: auto
+      - name: Test
+        run: go test ./...
+        env:
+          GOTOOLCHAIN: auto
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.23"
+          cache: true
+      # setup-go pins GOTOOLCHAIN=local, but go.mod targets a newer Go. Step env
+      # overrides it so the toolchain named in go.mod can be downloaded.
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13
+        env:
+          GOTOOLCHAIN: auto
