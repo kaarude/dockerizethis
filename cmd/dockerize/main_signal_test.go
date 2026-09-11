@@ -21,7 +21,7 @@ import (
 // Exercise main in a separate process so its signal handler and exit code run.
 func TestMainSIGTERMCleansUp(t *testing.T) {
 	if os.Getenv("DOCKERIZE_TEST_SIGNAL_CHILD") == "1" {
-		os.Args = []string{"dockerizethis", os.Getenv("DOCKERIZE_TEST_PROJECT"), "--yes", "--verify=full", "--json"}
+		os.Args = []string{"dockerize", os.Getenv("DOCKERIZE_TEST_PROJECT"), "--yes", "--verify=full", "--json"}
 		main()
 		return
 	}

@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-go build -o "$tmp/dockerizethis" ./cmd/dockerizethis
+go build -o "$tmp/dockerize" ./cmd/dockerize
 
 found=0
 failed=0
@@ -18,8 +18,8 @@ for fixture in testdata/fixtures/*/; do
     work="$tmp/work/$name"
     mkdir -p "$work"
     cp -R "$fixture/." "$work/"
-    if ! output=$("$tmp/dockerizethis" --yes --verify=none "$work" 2>&1); then
-        echo "FAIL $name: dockerizethis exited non-zero:" >&2
+    if ! output=$("$tmp/dockerize" --yes --verify=none "$work" 2>&1); then
+        echo "FAIL $name: dockerize exited non-zero:" >&2
         echo "$output" >&2
         failed=$((failed + 1))
         continue

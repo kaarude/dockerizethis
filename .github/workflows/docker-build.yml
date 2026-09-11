@@ -37,15 +37,15 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
-      - name: Build dockerizethis
-        run: go build -o dockerizethis ./cmd/dockerizethis
+      - name: Build dockerize
+        run: go build -o dockerize ./cmd/dockerize
         env:
           GOTOOLCHAIN: auto
       - name: Generate artifacts and verify the image build
         run: |
           work=$(mktemp -d)
           cp -R "testdata/fixtures/${{ matrix.fixture }}/." "$work/"
-          ./dockerizethis --yes --verify=build --json "$work" > "$work/report.json"
+          ./dockerize --yes --verify=build --json "$work" > "$work/report.json"
           test -s "$work/Dockerfile"
           test -s "$work/.dockerignore"
           jq -e '.verify.status == "passed" and (.verify.build.image | type == "string" and length > 0)' "$work/report.json"

@@ -30,7 +30,7 @@ Keep tests beside the code they exercise. Before handing off work, run:
 go build ./... && go test ./...
 ```
 
-For CLI changes, also exercise `go run ./cmd/dockerizethis --help` and the affected
+For CLI changes, also exercise `go run ./cmd/dockerize --help` and the affected
 command path. Never report artifacts as verified unless verification actually ran.
 
 ## File ownership for parallel agents

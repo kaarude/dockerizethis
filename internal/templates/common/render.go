@@ -102,7 +102,7 @@ func RenderAction(p plan.Plan) (emit.File, error) {
 }
 
 // RenderDeployDoc renders DEPLOY.md: a VPS quickstart plus per-process and
-// per-service notes. Plan values dockerizethis does not know become TODO
+// per-service notes. Plan values dockerize does not know become TODO
 // comments rather than wrong instructions.
 func RenderDeployDoc(p plan.Plan) (emit.File, error) {
 	return render("DEPLOY.md.tmpl", "DEPLOY.md", p)
