@@ -6,14 +6,14 @@
 [![Release](https://img.shields.io/github/v/release/kaarude/dockerizethis?include_prereleases)](https://github.com/kaarude/dockerizethis/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-dockerizethis detects how your project runs and generates the Docker artifacts
+dockerize detects how your project runs and generates the Docker artifacts
 you own — `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `.env.example`,
 a GHCR publishing workflow, and `DEPLOY.md` — then proves they build.
 
 ## Install
 
 ```sh
-go install github.com/carl/dockerizethis/cmd/dockerizethis@latest
+go install github.com/carl/dockerizethis/cmd/dockerize@latest
 ```
 
 Or build from a checkout with the Go version declared in `go.mod`:
@@ -21,13 +21,13 @@ Or build from a checkout with the Go version declared in `go.mod`:
 ```sh
 git clone https://github.com/kaarude/dockerizethis.git
 cd dockerizethis
-go build -o dockerizethis ./cmd/dockerizethis
+go build -o dockerize ./cmd/dockerize
 ```
 
 ## Quickstart
 
 ```sh
-dockerizethis ./my-app
+dockerize ./my-app
 ```
 
 Point it at any project directory (the path defaults to `.`). It detects the
@@ -49,7 +49,7 @@ services with healthchecks and named volumes.
 ## Flags
 
 ```
-dockerizethis [path] [flags]
+dockerize [path] [flags]
 ```
 
 | Flag | Type | Default | Description |

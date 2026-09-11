@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a problem with dockerizethis.
+description: Report a problem with dockerize.
 title: "bug: "
 labels:
   - bug
@@ -13,7 +13,7 @@ body:
     attributes:
       label: What happened?
       description: Describe the behavior you saw.
-      placeholder: dockerizethis wrote a Dockerfile that fails to build because ...
+      placeholder: dockerize wrote a Dockerfile that fails to build because ...
     validations:
       required: true
   - type: textarea
@@ -21,7 +21,7 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Run `dockerizethis ./my-app`
+        1. Run `dockerize ./my-app`
         2. Open the generated Dockerfile
         3. Run `docker build .`
     validations:
@@ -36,7 +36,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: dockerizethis version
+      label: dockerize version
       description: The release tag or commit you built from.
     validations:
       required: true

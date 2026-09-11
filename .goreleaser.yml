@@ -8,8 +8,8 @@ before:
 
 builds:
   - id: dockerizethis
-    main: ./cmd/dockerizethis
-    binary: dockerizethis
+    main: ./cmd/dockerize
+    binary: dockerize
     env:
       - CGO_ENABLED=0
     goos:

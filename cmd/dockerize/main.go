@@ -50,7 +50,7 @@ func main() {
 func newRootCommand() *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
-		Use:           "dockerizethis [path]",
+		Use:           "dockerize [path]",
 		Short:         "Generate verified Docker hosting artifacts for a project",
 		Long:          "Detect how a project runs, generate Docker hosting artifacts (Dockerfile, .dockerignore, docker-compose.yml, .env.example, a GHCR workflow, DEPLOY.md), and verify the image builds.\nThe path defaults to \".\".",
 		Args:          cobra.MaximumNArgs(1),

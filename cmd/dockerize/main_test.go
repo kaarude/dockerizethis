@@ -20,7 +20,7 @@ func TestHelp(t *testing.T) {
 	cmd.SetOut(&output)
 	cmd.SetArgs([]string{"--help"})
 	require.NoError(t, cmd.Execute())
-	require.Contains(t, output.String(), "dockerizethis [path]")
+	require.Contains(t, output.String(), "dockerize [path]")
 	for _, flag := range []string{"dry-run", "yes", "json", "verify", "stack", "service", "force", "backup"} {
 		require.Contains(t, output.String(), "--"+flag)
 	}
