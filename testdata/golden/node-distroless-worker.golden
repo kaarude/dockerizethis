@@ -1,0 +1,24 @@
+--- Dockerfile (mode 0644) ---
+FROM node:22-alpine AS deps
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PATH="/app/node_modules/.bin:$PATH"
+COPY package.json package-lock.json ./
+RUN NODE_ENV=development npm ci
+
+FROM deps AS build
+COPY . .
+
+FROM gcr.io/distroless/nodejs22 AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build --chown=1001:1001 /app /app
+USER 1001
+CMD ["worker.js","--queue=jobs"]
+--- .dockerignore (mode 0644) ---
+node_modules
+.git
+.env*
+*.md
+Dockerfile
+docker-compose.yml

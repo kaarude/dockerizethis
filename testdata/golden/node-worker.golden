@@ -1,0 +1,34 @@
+--- Dockerfile (mode 0644) ---
+FROM node:22-alpine AS deps
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PATH="/app/node_modules/.bin:$PATH"
+ENV COREPACK_HOME=/opt/corepack
+RUN npm install --global --force corepack && corepack enable
+RUN apk add --no-cache python3 make g++
+COPY package.json pnpm-lock.yaml ./
+RUN NODE_ENV=development pnpm i --frozen-lockfile
+
+FROM deps AS build
+COPY . .
+RUN pnpm run build
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PATH="/app/node_modules/.bin:$PATH"
+ENV COREPACK_HOME=/opt/corepack
+COPY --from=deps /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/corepack
+COPY --from=deps /opt/corepack /opt/corepack
+RUN node /usr/local/lib/node_modules/corepack/dist/corepack.js enable
+COPY --from=build --chown=node:node /app /app
+USER node
+CMD ["/bin/sh","-c","pnpm start"]
+--- .dockerignore (mode 0644) ---
+node_modules
+.git
+dist
+.env*
+*.md
+Dockerfile
+docker-compose.yml
