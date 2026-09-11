@@ -2,13 +2,13 @@
 
 ## Reporting a vulnerability
 
-Report security issues by email to security@example.com. Replace this address with the
-project's real security contact before the repository goes public.
+A private reporting channel has not been configured yet. Contact the maintainer
+through their [GitHub profile](https://github.com/kaarude) to arrange a private
+channel before sharing vulnerability details. Do not put exploit details or
+secrets in a public issue.
 
-Include what you found, the steps to reproduce it, the affected version or commit, and
-any proof-of-concept files. Do not open a public issue for a vulnerability. We will
-acknowledge your report within five business days and keep you updated until the fix
-ships. Please give us a reasonable window to patch before you publish details.
+Once a private channel is available, include the affected commit, reproduction
+steps, and the impact you observed.
 
 ## What dockerizethis does with secrets
 

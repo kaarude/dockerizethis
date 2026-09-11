@@ -6,43 +6,41 @@
 [![Release](https://img.shields.io/github/v/release/kaarude/dockerizethis?include_prereleases)](https://github.com/kaarude/dockerizethis/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-dockerizethis reads a project, works out how it is built and started, and writes the
-Docker artifacts you would otherwise hand-roll: a Dockerfile, `.dockerignore`, a compose
-file, `.env.example`, a CI workflow, and deploy notes. Then it runs the build to prove
-the image actually comes up. Every file lands in your repo, so you own and can edit it.
-There is no hosted service and no lock-in.
+dockerizethis is being built to detect how a project runs and generate Docker
+artifacts. Node detection, Dockerfile templates, and file emission are available
+as internal packages. The CLI is still a scaffold: it parses flags and reports
+that the pipeline is not implemented. It does not generate or verify files yet.
 
 ## Quickstart
 
-Install the CLI:
+Build from a checkout with the Go version declared in `go.mod`:
 
 ```sh
-go install github.com/kaarude/dockerizethis/cmd/dockerizethis@latest
+git clone https://github.com/kaarude/dockerizethis.git
+cd dockerizethis
+go build -o dockerizethis ./cmd/dockerizethis
+./dockerizethis --help
+./dockerizethis ./my-app --dry-run
 ```
 
-Point it at a project:
+The last command currently reports that no files were generated or verified.
+The path defaults to the current directory.
 
-```sh
-dockerizethis ./my-app
-```
-
-The path defaults to the current directory, so `dockerizethis` alone works too. On the
-first run dockerizethis prints what it detected, shows the artifacts it plans to write,
-and verifies the result with a build. Use `--dry-run` to preview without touching disk.
+`go install` through the GitHub repository path is not supported yet because
+`go.mod` still declares `github.com/carl/dockerizethis`.
 
 ## Supported stacks
 
-Detection ships stack by stack. Everything below is on the roadmap; Node.js and
-TypeScript land first.
+The Node packages are implemented; connecting them to the CLI is still pending.
 
 | Stack | Detection markers | Status |
 | --- | --- | --- |
-| Node.js / TypeScript | `package.json`, lockfiles | Roadmap |
+| Node.js / TypeScript | `package.json`, lockfiles | Internal packages; CLI pending |
 | Go | `go.mod` | Roadmap |
 | Python | `pyproject.toml`, `requirements.txt` | Roadmap |
 | Static site | `index.html` | Roadmap |
 
-Each stack produces the same artifact set: `Dockerfile`, `.dockerignore`,
+The planned artifact set includes `Dockerfile`, `.dockerignore`,
 `compose.yaml`, `.env.example`, a CI workflow, and deploy notes. Plans carry the
 runtime version, package manager, framework, process type, port, health path, and any
 backing services (Postgres, Redis, MySQL, Mongo) they need.
@@ -66,13 +64,12 @@ dockerizethis [path] [flags]
 | `--backup` | bool | `false` | Back up existing artifact files before replacement |
 | `--help`, `-h` | bool | `false` | Show help for the command |
 
-`--verify=none` skips verification, `--verify=build` builds the image, and
-`--verify=full` builds and then checks the container starts and answers its health
-path. Verification never runs during `--dry-run`.
+The flags above reserve the intended behavior. Currently only argument parsing,
+verification-level validation, and text/JSON scaffold output are implemented.
 
 ## How it works
 
-The CLI runs a fixed pipeline: detect the stack, complete a plan, emit artifacts, verify
+The planned CLI pipeline will detect the stack, complete a plan, emit artifacts, verify
 the build, then report what happened. Each stage is a package under `internal/`, and the
 interfaces between them are frozen so the stages can be built and tested on their own.
 See [CONTRIBUTING.md](CONTRIBUTING.md) to add a stack.
