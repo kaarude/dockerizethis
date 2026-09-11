@@ -1,0 +1,7 @@
+{
+  "name": "node-discord-worker",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node worker.mjs" },
+  "dependencies": { "discord.js": "^14.0.0" }
+}
