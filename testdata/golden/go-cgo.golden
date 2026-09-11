@@ -1,0 +1,27 @@
+--- Dockerfile (mode 0644) ---
+FROM golang:1.23-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache ca-certificates build-base
+# The wildcard also supports stdlib-only modules without go.sum.
+COPY go.mod go.sum* ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=1 go build -trimpath -o /app/server .
+
+FROM alpine:3.23 AS runtime
+RUN apk add --no-cache ca-certificates libgcc libstdc++ \
+    && addgroup -S -g 65532 app && adduser -S -u 65532 -G app app
+WORKDIR /app
+COPY --from=builder --chown=65532:65532 /app/server /app/server
+USER 65532:65532
+EXPOSE 8080
+CMD ["/app/server"]
+--- .dockerignore (mode 0644) ---
+.git
+.env*
+bin
+coverage
+*.test
+*.out
+Dockerfile
+docker-compose.yml

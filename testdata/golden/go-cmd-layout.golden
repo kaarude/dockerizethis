@@ -1,0 +1,26 @@
+--- Dockerfile (mode 0644) ---
+FROM golang:1.23-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache ca-certificates
+# The wildcard also supports stdlib-only modules without go.sum.
+COPY go.mod go.sum* ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -o /app/server ./cmd/service
+
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+WORKDIR /app
+COPY --from=builder --chown=65532:65532 /app/server /app/server
+USER 65532:65532
+EXPOSE 8080
+CMD ["/app/server"]
+--- .dockerignore (mode 0644) ---
+.git
+.env*
+bin
+coverage
+*.test
+*.out
+Dockerfile
+docker-compose.yml
