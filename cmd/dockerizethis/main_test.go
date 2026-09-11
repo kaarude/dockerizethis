@@ -308,3 +308,23 @@ esac
 		})
 	}
 }
+
+type brokenWriter struct{ err error }
+
+func (w brokenWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestProgressFailureStopsBeforeDocker(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	sentinel := errors.New("closed progress stream")
+	cmd := newRootCommand()
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(brokenWriter{sentinel})
+	cmd.SetArgs([]string{fixture(t, "go-http"), "--json"})
+	err := cmd.Execute()
+	require.ErrorIs(t, err, sentinel)
+	require.Equal(t, 1, verify.Code(err))
+	var r report
+	require.NoError(t, json.Unmarshal(output.Bytes(), &r))
+	require.Nil(t, r.Verify.Build)
+}

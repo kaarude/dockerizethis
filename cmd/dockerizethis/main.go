@@ -161,7 +161,9 @@ func run(cmd *cobra.Command, path string, opts options) (runErr error) {
 		return nil
 	}
 	r.Verify.Reason = ""
-	fmt.Fprintln(cmd.ErrOrStderr(), "Building Docker image...")
+	if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Building Docker image..."); err != nil {
+		return fmt.Errorf("write build progress: %w", err)
+	}
 	build, err := verify.Build(cmd.Context(), path, "Dockerfile")
 	r.Verify.Build = &build
 	if err != nil {
@@ -174,7 +176,9 @@ func run(cmd *cobra.Command, path string, opts options) (runErr error) {
 			r.Verify.Reason = "smoke skipped: only web processes are probed"
 			return nil
 		}
-		fmt.Fprintln(cmd.ErrOrStderr(), "Checking HTTP startup...")
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Checking HTTP startup..."); err != nil {
+			return fmt.Errorf("write smoke progress: %w", err)
+		}
 		smokePlan := p
 		smokePlan.Extras = maps.Clone(p.Extras)
 		if smokePlan.Extras == nil {

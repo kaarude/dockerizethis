@@ -66,7 +66,7 @@ func available(ctx context.Context, dir string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if _, err := docker(ctx, dir, "info", "--format", "{{.ServerVersion}}"); err != nil {
-		return failure(4, fmt.Errorf("Docker unavailable: start Docker and check docker info: %w", err))
+		return failure(4, fmt.Errorf("docker unavailable: start Docker and check docker info: %w", err))
 	}
 	return nil
 }
@@ -83,7 +83,7 @@ func Build(ctx context.Context, dir, dockerfilePath string) (BuildResult, error)
 	output, err := docker(ctx, dir, "build", "--load", "--progress=plain", "--tag", image, "--file", dockerfilePath, ".")
 	result.Output = output
 	if err != nil {
-		return result, failure(2, fmt.Errorf("Docker build failed: %w\n%s", err, output))
+		return result, failure(2, fmt.Errorf("docker build failed: %w\n%s", err, output))
 	}
 	result.Image = image
 	return result, nil
@@ -145,7 +145,7 @@ func Smoke(ctx context.Context, dir string, p plan.Plan) (result SmokeResult, ru
 	}
 	host, port, err := net.SplitHostPort(address)
 	if err != nil || host != "127.0.0.1" {
-		return result, failure(3, fmt.Errorf("Docker did not publish a loopback smoke port"))
+		return result, failure(3, fmt.Errorf("docker did not publish a loopback smoke port"))
 	}
 	result.URL = "http://" + net.JoinHostPort(host, port) + path
 	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
