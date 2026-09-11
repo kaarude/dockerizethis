@@ -75,6 +75,15 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 	if err != nil {
 		return plan.Plan{}, false, err
 	}
+	if lockfile == "" {
+		// "none" tells the renderer there is no lockfile to COPY; only npm
+		// can install without one.
+		if p.Extras == nil {
+			p.Extras = map[string]string{}
+		}
+		p.Extras["lockfile"] = "none"
+		p.Notes = append(p.Notes, "no lockfile found; npm install is not reproducible — commit package-lock.json")
+	}
 	p.Version, versioned, err = nodeVersion(dir, m.Engines.Node)
 	if err != nil {
 		return plan.Plan{}, false, err

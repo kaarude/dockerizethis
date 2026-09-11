@@ -16,7 +16,7 @@ COPY --from=oven/bun:alpine /usr/local/bin/bun /usr/local/bin/bun
 {{if .NativeDeps -}}
 RUN apk add --no-cache python3 make g++
 {{end -}}
-COPY package.json {{.Lockfile}} ./
+COPY package.json{{if .Lockfile}} {{.Lockfile}}{{end}} ./
 RUN NODE_ENV=development {{.InstallCmd}}
 
 FROM deps AS build

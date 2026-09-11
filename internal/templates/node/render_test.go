@@ -102,6 +102,21 @@ func TestPackageManagers(t *testing.T) {
 			require.Contains(t, dockerfile, "RUN NODE_ENV=development "+tc.command+"\n")
 		})
 	}
+	t.Run("npm without a lockfile", func(t *testing.T) {
+		p := webPlan()
+		p.Extras["lockfile"] = "none"
+		files, err := node.RenderNode(p)
+		require.NoError(t, err)
+		dockerfile := artifact(t, files, "Dockerfile")
+		require.Contains(t, dockerfile, "COPY package.json ./\n")
+		require.Contains(t, dockerfile, "RUN NODE_ENV=development npm install\n")
+	})
+	t.Run("none is npm-only", func(t *testing.T) {
+		p := webPlan()
+		p.PkgManager, p.Extras["lockfile"] = "pnpm", "none"
+		_, err := node.RenderNode(p)
+		require.ErrorContains(t, err, "lockfile")
+	})
 }
 
 func TestRenderNodeBehavior(t *testing.T) {
