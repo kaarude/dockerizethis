@@ -1,7 +1,6 @@
 package emit
 
 import (
-    "errors"
     "io/fs"
 )
 
@@ -24,6 +23,5 @@ type Result struct {
 
 // Write applies files under root per opts. Never silently overwrites.
 func Write(root string, files []File, opts Options) ([]Result, error) {
-    // TODO: implement artifact writing under root according to opts.
-    return nil, errors.New("emit.Write is not implemented")
+    return write(root, files, opts)
 }
