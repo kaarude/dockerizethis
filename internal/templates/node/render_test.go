@@ -88,9 +88,9 @@ func TestPackageManagers(t *testing.T) {
 		{"npm", "package-lock.json", "npm ci"},
 		{"npm", "npm-shrinkwrap.json", "npm ci"},
 		{"pnpm", "pnpm-lock.yaml", "pnpm i --frozen-lockfile"},
-		{"yarn", "yarn.lock", "yarn --immutable"},
-		{"bun", "bun.lock", "bun i"},
-		{"bun", "bun.lockb", "bun i"},
+		{"yarn", "yarn.lock", `sh -c 'case "$(yarn --version)" in 1.*) yarn --frozen-lockfile ;; *) yarn --immutable ;; esac'`},
+		{"bun", "bun.lock", "bun i --frozen-lockfile"},
+		{"bun", "bun.lockb", "bun i --frozen-lockfile"},
 	} {
 		t.Run(tc.lock, func(t *testing.T) {
 			p := webPlan()

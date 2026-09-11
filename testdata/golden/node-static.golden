@@ -8,7 +8,7 @@ RUN npm install --global --force corepack && corepack enable
 ENV YARN_NODE_LINKER=node-modules
 RUN corepack install --global yarn@stable
 COPY package.json yarn.lock ./
-RUN NODE_ENV=development yarn --immutable
+RUN NODE_ENV=development sh -c 'case "$(yarn --version)" in 1.*) yarn --frozen-lockfile ;; *) yarn --immutable ;; esac'
 
 FROM deps AS build
 COPY . .

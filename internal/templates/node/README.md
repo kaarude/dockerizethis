@@ -22,6 +22,9 @@ arguments are supported; shell expressions and package-manager commands return
 an error because the image has no shell or package manager. The Node entrypoint
 comes from the base image. Healthchecks use its absolute Node executable path.
 
+Bun and Yarn Classic installs use `--frozen-lockfile`; modern Yarn uses
+`--immutable`. Mismatched manifests fail the build.
+
 Build dependencies are installed even with `NODE_ENV=production`, so build tools
 listed in `devDependencies` are available. Web and worker images retain the app
 directory and installed dependencies. Compiler packages stay out of the runtime

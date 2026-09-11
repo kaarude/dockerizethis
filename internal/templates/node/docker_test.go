@@ -56,6 +56,10 @@ func TestDocker(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(dir, file.Path), file.Content, file.Mode))
 			}
 			manifest := fixturePackage
+			// Bun deletes empty lockfiles, so use one small dependency to exercise frozen installs.
+			if tc.manager == "bun" {
+				manifest = strings.TrimSuffix(manifest, "}") + `,"dependencies":{"is-number":"7.0.0"}}`
+			}
 			if tc.manager == "yarn" {
 				manifest = strings.TrimSuffix(manifest, "}") + `,"packageManager":"yarn@4.18.0"}`
 			}
@@ -118,6 +122,13 @@ func TestDocker(t *testing.T) {
 			var exitErr *exec.ExitError
 			require.ErrorAs(t, err, &exitErr, "%s", output)
 			require.Equal(t, 1, exitErr.ExitCode())
+			if tc.manager == "bun" {
+				docker(t, "exec", name, "node", "-e", `const fs=require('node:fs');const p=JSON.parse(fs.readFileSync('package.json'));p.dependencies['is-number']='6.0.0';fs.writeFileSync('package.json',JSON.stringify(p));`)
+				output, err := exec.CommandContext(ctx, "docker", "exec", name, "bun", "i", "--frozen-lockfile").CombinedOutput()
+				require.ErrorAs(t, err, &exitErr, "%s", output)
+				require.Equal(t, 1, exitErr.ExitCode())
+				require.Contains(t, string(output), "lockfile is frozen")
+			}
 		})
 	}
 }
@@ -168,4 +179,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 `
-const bunLock = `{"lockfileVersion":1,"workspaces":{"":{"name":"node-template-fixture"}},"packages":{}}`
+const bunLock = `{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "node-template-fixture",
+      "dependencies": {
+        "is-number": "7.0.0",
+      },
+    },
+  },
+  "packages": {
+    "is-number": ["is-number@7.0.0", "", {}, "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng=="],
+  }
+}
+`

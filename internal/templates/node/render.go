@@ -102,9 +102,9 @@ func prepare(p plan.Plan) (renderData, error) {
 	case "pnpm":
 		d.Lockfile, d.InstallCmd = "pnpm-lock.yaml", "pnpm i --frozen-lockfile"
 	case "yarn":
-		d.Lockfile, d.InstallCmd = "yarn.lock", "yarn --immutable"
+		d.Lockfile, d.InstallCmd = "yarn.lock", `sh -c 'case "$(yarn --version)" in 1.*) yarn --frozen-lockfile ;; *) yarn --immutable ;; esac'`
 	case "bun":
-		d.Lockfile, d.InstallCmd = "bun.lockb", "bun i"
+		d.Lockfile, d.InstallCmd = "bun.lockb", "bun i --frozen-lockfile"
 	default:
 		return d, fmt.Errorf("unsupported package manager %q", p.PkgManager)
 	}
