@@ -18,7 +18,7 @@ var (
 	reLegacyFail = regexp.MustCompile(`(?i)returned a non-zero code|^(?:COPY|ADD) failed`)
 )
 
-// failure is the parsed signature of a failed docker build.
+// buildFailure is the parsed signature of a failed docker build.
 type buildFailure struct {
 	Step    string // engine-native step label, e.g. "[4/5] RUN npm ci" or "Step 4/5: RUN npm ci"
 	Message string // best single-line summary of the error
@@ -149,18 +149,3 @@ func (w *tailWriter) Write(p []byte) (int, error) {
 }
 
 func (w *tailWriter) String() string { return string(w.buf) }
-
-// oneLine returns the last non-empty line of s, truncated to 200 chars,
-// for embedding raw command output into an error message.
-func oneLine(s string) string {
-	line := ""
-	for _, l := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
-		if t := strings.TrimSpace(l); t != "" {
-			line = t
-		}
-	}
-	if len(line) > 200 {
-		line = line[:200] + "…"
-	}
-	return line
-}
