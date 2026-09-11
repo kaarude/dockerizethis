@@ -110,7 +110,10 @@ func prepare(p plan.Plan) (renderData, error) {
 	}
 	if lockfile := p.Extras["lockfile"]; lockfile != "" {
 		// Installers discover their own lockfile, so arbitrary filenames won't work.
-		if lockfile != d.Lockfile && !(p.PkgManager == "npm" && lockfile == "npm-shrinkwrap.json") && !(p.PkgManager == "bun" && lockfile == "bun.lock") {
+		supported := lockfile == d.Lockfile ||
+			(p.PkgManager == "npm" && lockfile == "npm-shrinkwrap.json") ||
+			(p.PkgManager == "bun" && lockfile == "bun.lock")
+		if !supported {
 			return d, fmt.Errorf("lockfile %q is not supported by %s", lockfile, p.PkgManager)
 		}
 		d.Lockfile = lockfile
