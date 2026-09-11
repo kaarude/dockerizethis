@@ -3,7 +3,10 @@
 Use `node.Detector{}` through the frozen `detect.Detector` interface. Detection
 reads project files without installing dependencies or executing scripts.
 
-- Lockfile priority is pnpm, Yarn, Bun, then npm. No lockfile means npm.
+- Lockfile priority is pnpm, Yarn, Bun, then npm. Bun prefers `bun.lock`
+  over `bun.lockb`; npm prefers `npm-shrinkwrap.json` over `package-lock.json`.
+  Nondefault filenames are passed to the renderer in `Extras["lockfile"]`.
+  No lockfile means npm.
 - Version priority is `engines.node`, `.nvmrc`, then `.node-version`, with
   `20` as the default. Exact numeric versions and common lower-bound ranges
   yield a numeric version. This is a heuristic, not a full semver solver.

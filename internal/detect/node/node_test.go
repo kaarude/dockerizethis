@@ -120,6 +120,30 @@ func TestPackageManagers(t *testing.T) {
 	})
 }
 
+func TestAlternativeLockfiles(t *testing.T) {
+	for _, tc := range []struct {
+		name, manager, selected string
+		locks                   []string
+	}{
+		{"Bun text", "bun", "bun.lock", []string{"bun.lock"}},
+		{"Bun text preferred", "bun", "bun.lock", []string{"bun.lock", "bun.lockb", "package-lock.json"}},
+		{"npm shrinkwrap", "npm", "npm-shrinkwrap.json", []string{"npm-shrinkwrap.json"}},
+		{"npm shrinkwrap preferred", "npm", "npm-shrinkwrap.json", []string{"npm-shrinkwrap.json", "package-lock.json"}},
+		{"pnpm remains preferred", "pnpm", "", []string{"pnpm-lock.yaml", "bun.lock", "npm-shrinkwrap.json"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			files := map[string]string{"package.json": "{}"}
+			for _, lock := range tc.locks {
+				files[lock] = ""
+			}
+			p := detectFiles(t, files)
+			require.Equal(t, tc.manager, p.PkgManager)
+			require.Equal(t, tc.selected, p.Extras["lockfile"])
+			require.Equal(t, 0.6, p.Confidence)
+		})
+	}
+}
+
 func TestVersions(t *testing.T) {
 	for _, tc := range []struct {
 		name, engine, nvm, versionFile, want string

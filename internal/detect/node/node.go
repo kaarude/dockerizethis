@@ -66,7 +66,12 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 
 	p := plan.Plan{Stack: "node", Workdir: "/app"}
 	var locked, versioned bool
-	p.PkgManager, locked, err = packageManager(dir)
+	var lockfile string
+	p.PkgManager, lockfile, err = packageManager(dir)
+	locked = lockfile != ""
+	if lockfile == "bun.lock" || lockfile == "npm-shrinkwrap.json" {
+		p.Extras = map[string]string{"lockfile": lockfile}
+	}
 	if err != nil {
 		return plan.Plan{}, false, err
 	}
@@ -147,23 +152,24 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 	return p, true, nil
 }
 
-func packageManager(dir string) (string, bool, error) {
+func packageManager(dir string) (string, string, error) {
 	for _, lock := range []struct{ file, manager string }{
 		{"pnpm-lock.yaml", "pnpm"}, {"yarn.lock", "yarn"},
-		{"bun.lockb", "bun"}, {"package-lock.json", "npm"},
+		{"bun.lock", "bun"}, {"bun.lockb", "bun"},
+		{"npm-shrinkwrap.json", "npm"}, {"package-lock.json", "npm"},
 	} {
 		info, err := os.Stat(filepath.Join(dir, lock.file))
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 		if err != nil {
-			return "", false, fmt.Errorf("inspect %s: %w", lock.file, err)
+			return "", "", fmt.Errorf("inspect %s: %w", lock.file, err)
 		}
 		if info.Mode().IsRegular() {
-			return lock.manager, true, nil
+			return lock.manager, lock.file, nil
 		}
 	}
-	return "npm", false, nil
+	return "npm", "", nil
 }
 
 // Common exact versions and lower-bound engine ranges yield a numeric image tag.
