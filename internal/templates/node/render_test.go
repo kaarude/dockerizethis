@@ -136,6 +136,19 @@ func TestRenderNodeBehavior(t *testing.T) {
 					require.Contains(t, strings.Split(ignore, "\n"), pattern)
 				}
 				require.Equal(t, build != "", strings.Contains(dockerfile, "RUN npm run build\n"))
+
+				custom := webPlan()
+				custom.Process, custom.BuildCmd = process, build
+				custom.Extras["staticDir"] = "out"
+				customFiles, err := node.RenderNode(custom)
+				require.NoError(t, err)
+				customIgnore := artifact(t, customFiles, ".dockerignore")
+				if process == plan.ProcessStatic && build != "" {
+					require.Contains(t, customIgnore, "\nout\n", "the configured static output directory is ignored")
+					require.NotContains(t, customIgnore, "\ndist\n")
+				} else {
+					require.NotContains(t, customIgnore, "\nout\n")
+				}
 			})
 		}
 	}

@@ -1,7 +1,7 @@
 node_modules
 .git
 {{if .BuildCmd -}}
-dist
+{{if eq .Process "static"}}{{.StaticDir}}{{else}}dist{{end}}
 {{end -}}
 .env*
 *.md

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"io/fs"
 	"os"
@@ -48,6 +49,7 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		p.Notes = append(p.Notes, "no supported go directive; using Go 1.26")
 	}
 	imports, names, mains := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	var unparseable []string
 	web, port := false, 0
 	err = filepath.WalkDir(dir, func(filename string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -72,6 +74,13 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		}
 		f, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
 		if err != nil {
+			// A file that does not parse contributes nothing but must not
+			// sink detection; I/O errors still fail the scan.
+			var syntax scanner.ErrorList
+			if errors.As(err, &syntax) {
+				unparseable = append(unparseable, filename)
+				return nil
+			}
 			return err
 		}
 		aliases := map[string]string{}
@@ -165,6 +174,9 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 	})
 	if err != nil {
 		return plan.Plan{}, false, fmt.Errorf("scan Go sources: %w", err)
+	}
+	if len(unparseable) > 0 {
+		p.Notes = append(p.Notes, fmt.Sprintf("skipped %d Go file(s) with syntax errors; detection may be incomplete", len(unparseable)))
 	}
 	for _, framework := range []struct{ name, dependency string }{{"gin", "github.com/gin-gonic/gin"}, {"echo", "github.com/labstack/echo"}, {"chi", "github.com/go-chi/chi"}} {
 		if hasImport(imports, framework.dependency) {

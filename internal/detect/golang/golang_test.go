@@ -125,9 +125,10 @@ func TestAbsentAndFailures(t *testing.T) {
 	require.False(t, ok)
 	write(t, dir, "go.mod", "module example.com/test\ngo 1.23\n")
 	write(t, dir, "main.go", "invalid")
-	_, ok, err = (golang.Detector{}).Detect(dir)
-	require.ErrorContains(t, err, "scan Go sources")
-	require.False(t, ok)
+	p, ok, err = (golang.Detector{}).Detect(dir)
+	require.NoError(t, err, "syntax errors degrade to a note instead of sinking detection")
+	require.True(t, ok)
+	require.Contains(t, p.Notes[0], "syntax errors")
 }
 
 func write(t *testing.T, dir, name, data string) {
