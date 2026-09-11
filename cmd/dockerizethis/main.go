@@ -282,29 +282,32 @@ func interactive(cmd *cobra.Command) bool {
 
 // confirm shows the plan and artifact list, then requires "y" to proceed.
 func confirm(cmd *cobra.Command, root string, p plan.Plan, files []emit.File) error {
-	out := cmd.ErrOrStderr()
-	fmt.Fprintf(out, "Plan: %s %s %s", p.Stack, p.Version, p.Process)
+	var prompt strings.Builder
+	fmt.Fprintf(&prompt, "Plan: %s %s %s", p.Stack, p.Version, p.Process)
 	if p.Framework != "" {
-		fmt.Fprintf(out, " (%s)", p.Framework)
+		fmt.Fprintf(&prompt, " (%s)", p.Framework)
 	}
 	if p.Port != 0 {
-		fmt.Fprintf(out, " port %d", p.Port)
+		fmt.Fprintf(&prompt, " port %d", p.Port)
 	}
 	if len(p.Services) > 0 {
 		names := make([]string, len(p.Services))
 		for i, s := range p.Services {
 			names[i] = string(s)
 		}
-		fmt.Fprintf(out, " services: %s", strings.Join(names, ", "))
+		fmt.Fprintf(&prompt, " services: %s", strings.Join(names, ", "))
 	}
-	fmt.Fprintln(out)
+	prompt.WriteByte('\n')
 	for _, n := range p.Notes {
-		fmt.Fprintf(out, "  note: %s\n", n)
+		fmt.Fprintf(&prompt, "  note: %s\n", n)
 	}
 	for _, f := range files {
-		fmt.Fprintf(out, "  %s\n", f.Path)
+		fmt.Fprintf(&prompt, "  %s\n", f.Path)
 	}
-	fmt.Fprintf(out, "Write these %d files to %s? [y/N] ", len(files), root)
+	fmt.Fprintf(&prompt, "Write these %d files to %s? [y/N] ", len(files), root)
+	if _, err := io.WriteString(cmd.ErrOrStderr(), prompt.String()); err != nil {
+		return err
+	}
 	line, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		return err
@@ -321,65 +324,68 @@ func printReport(cmd *cobra.Command, rep report, asJSON bool) {
 		_ = json.NewEncoder(out).Encode(rep)
 		return
 	}
+	var text strings.Builder
 	p := rep.Plan
-	fmt.Fprintf(out, "Plan: %s %s %s", p.Stack, p.Version, p.Process)
+	fmt.Fprintf(&text, "Plan: %s %s %s", p.Stack, p.Version, p.Process)
 	if p.Framework != "" {
-		fmt.Fprintf(out, " (%s)", p.Framework)
+		fmt.Fprintf(&text, " (%s)", p.Framework)
 	}
 	if p.Port != 0 {
-		fmt.Fprintf(out, " port %d", p.Port)
+		fmt.Fprintf(&text, " port %d", p.Port)
 	}
-	fmt.Fprintf(out, " confidence %.1f\n", p.Confidence)
+	fmt.Fprintf(&text, " confidence %.1f\n", p.Confidence)
 	for _, r := range rep.Files {
-		fmt.Fprintf(out, "  %s %s\n", r.Action, r.Path)
+		fmt.Fprintf(&text, "  %s %s\n", r.Action, r.Path)
 	}
 	switch {
 	case rep.Verify == nil:
-		fmt.Fprintln(out, "Verify: skipped")
+		text.WriteString("Verify: skipped\n")
 	case rep.Verify.Smoke != nil:
 		s := rep.Verify.Smoke
 		switch {
 		case s.Skipped:
-			fmt.Fprintf(out, "Verify: smoke skipped (%s)\n", s.Reason)
+			fmt.Fprintf(&text, "Verify: smoke skipped (%s)\n", s.Reason)
 		case s.OK:
-			fmt.Fprintf(out, "Verify: smoke ok (HTTP %d after %d attempts)\n", s.StatusCode, s.Attempts)
+			fmt.Fprintf(&text, "Verify: smoke ok (HTTP %d after %d attempts)\n", s.StatusCode, s.Attempts)
 		default:
-			fmt.Fprintln(out, "Verify: smoke failed")
+			text.WriteString("Verify: smoke failed\n")
 		}
 	case rep.Verify.Build != nil:
 		b := rep.Verify.Build
 		if b.OK {
-			fmt.Fprintf(out, "Verify: build ok (%d ms, %s)\n", b.DurationMs, b.Image)
+			fmt.Fprintf(&text, "Verify: build ok (%d ms, %s)\n", b.DurationMs, b.Image)
 		} else {
-			fmt.Fprintln(out, "Verify: build failed")
+			text.WriteString("Verify: build failed\n")
 		}
 	}
 	for _, n := range p.Notes {
-		fmt.Fprintf(out, "Note: %s\n", n)
+		fmt.Fprintf(&text, "Note: %s\n", n)
 	}
+	_, _ = io.WriteString(out, text.String())
 }
 
 // printVerifyDiagnostics sends the failed step, log tail, and hint to
 // stderr so the machine-readable stdout report stays clean.
 func printVerifyDiagnostics(cmd *cobra.Command, v *verifyOutcome) {
-	out := cmd.ErrOrStderr()
+	var text strings.Builder
 	if v.Build != nil && !v.Build.OK {
 		if v.Build.FailedStep != "" {
-			fmt.Fprintf(out, "failed step: %s\n", v.Build.FailedStep)
+			fmt.Fprintf(&text, "failed step: %s\n", v.Build.FailedStep)
 		}
 		if v.Build.Stderr != "" {
-			fmt.Fprintf(out, "%s\n", v.Build.Stderr)
+			fmt.Fprintf(&text, "%s\n", v.Build.Stderr)
 		}
 		if v.Build.Hint != "" {
-			fmt.Fprintf(out, "hint: %s\n", v.Build.Hint)
+			fmt.Fprintf(&text, "hint: %s\n", v.Build.Hint)
 		}
 	}
 	if v.Smoke != nil && !v.Smoke.OK && !v.Smoke.Skipped {
 		if v.Smoke.Logs != "" {
-			fmt.Fprintf(out, "container logs:\n%s\n", v.Smoke.Logs)
+			fmt.Fprintf(&text, "container logs:\n%s\n", v.Smoke.Logs)
 		}
 		if v.Smoke.Hint != "" {
-			fmt.Fprintf(out, "hint: %s\n", v.Smoke.Hint)
+			fmt.Fprintf(&text, "hint: %s\n", v.Smoke.Hint)
 		}
 	}
+	_, _ = io.WriteString(cmd.ErrOrStderr(), text.String())
 }
