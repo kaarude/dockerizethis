@@ -273,3 +273,17 @@ func artifact(t *testing.T, files []emit.File, name string) string {
 	t.Fatalf("missing artifact %s", name)
 	return ""
 }
+
+func TestNoLockfile(t *testing.T) {
+	p := webPlan()
+	p.Extras["lockfile"] = "none"
+	files, err := node.RenderNode(p)
+	require.NoError(t, err)
+	dockerfile := artifact(t, files, "Dockerfile")
+	require.Contains(t, dockerfile, "COPY package.json ./\n")
+	require.Contains(t, dockerfile, "RUN NODE_ENV=development npm install\n")
+	require.NotContains(t, dockerfile, "package-lock.json")
+	p.PkgManager = "pnpm"
+	_, err = node.RenderNode(p)
+	require.ErrorContains(t, err, "lockfile")
+}

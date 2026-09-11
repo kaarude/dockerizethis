@@ -46,6 +46,8 @@ func TestFixtures(t *testing.T) {
 			got, ok, err := (node.Detector{}).Detect(filepath.Join("../../../testdata/fixtures", tc.name))
 			require.NoError(t, err)
 			require.True(t, ok)
+			tc.want.Extras = map[string]string{"lockfile": "none"}
+			tc.want.Notes = []string{"no lockfile found; npm install will resolve dependencies during the build; commit a lockfile for reproducible builds"}
 			require.Equal(t, tc.want, got)
 		})
 	}

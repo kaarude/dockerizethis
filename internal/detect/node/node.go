@@ -69,7 +69,10 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 	var lockfile string
 	p.PkgManager, lockfile, err = packageManager(dir)
 	locked = lockfile != ""
-	if lockfile == "bun.lock" || lockfile == "npm-shrinkwrap.json" {
+	if lockfile == "" {
+		p.Extras = map[string]string{"lockfile": "none"}
+		p.Notes = append(p.Notes, "no lockfile found; npm install will resolve dependencies during the build; commit a lockfile for reproducible builds")
+	} else if lockfile == "bun.lock" || lockfile == "npm-shrinkwrap.json" {
 		p.Extras = map[string]string{"lockfile": lockfile}
 	}
 	if err != nil {

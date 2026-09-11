@@ -42,3 +42,13 @@ before editing. Hand off shared CLI wiring to a designated integration owner.
 Preserve other agents' edits and report changed files and verification results at
 handoff. The integration owner runs the full build and test commands after combining
 the changes. Never commit or push without the human's instruction.
+
+## CLI integration conventions
+
+- Node detection sets `Extras["lockfile"]="none"` when no lockfile exists;
+  the renderer then uses `npm install`.
+- Pass `verify.Build`'s returned image to `verify.Smoke` through
+  `Extras["verifyImage"]` on a copy of the plan. Keep this runtime value out of
+  the reported detection plan.
+- Keep stdout parseable under `--json`. Prompts, progress, and emitter dry-run
+  diffs belong on stderr.

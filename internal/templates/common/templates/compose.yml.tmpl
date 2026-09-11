@@ -10,7 +10,7 @@ services:
     env_file:
       - .env
 {{- end }}
-{{- if .Web }}
+{{- if or .Web .Static }}
     ports:
       - "{{.Port}}:{{.Port}}"
 {{- end }}

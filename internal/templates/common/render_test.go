@@ -230,3 +230,14 @@ func TestRenderersDoNotMutatePlan(t *testing.T) {
 	}
 	require.Equal(t, before, fmt.Sprintf("%v", p))
 }
+
+func TestStaticPort(t *testing.T) {
+	p := webPlan()
+	p.Process = plan.ProcessStatic
+	file, err := common.RenderCompose(p)
+	require.NoError(t, err)
+	require.Contains(t, string(file.Content), `"3000:3000"`)
+	p.Port = 0
+	_, err = common.RenderCompose(p)
+	require.ErrorContains(t, err, "port")
+}
