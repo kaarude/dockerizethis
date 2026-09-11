@@ -1,0 +1,33 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 288B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.12-slim
+#3 DONE 0.9s
+
+#4 [1/4] FROM docker.io/library/python:3.12-slim@sha256:1a2b3c4d5e6f
+#4 DONE 0.0s
+
+#5 [2/4] WORKDIR /app
+#5 CACHED
+
+#6 [3/4] COPY requirements.txt ./
+#6 ERROR: failed to calculate checksum of ref moby::7f8e9d0c1b2a: "/requirements.txt": not found
+------
+ > [3/4] COPY requirements.txt ./:
+------
+Dockerfile:6
+--------------------
+   4 |     WORKDIR /app
+   5 |
+   6 | >>> COPY requirements.txt ./
+   7 |
+   8 |     RUN pip install -r requirements.txt
+--------------------
+ERROR: failed to solve: failed to compute cache key: failed to calculate checksum of ref moby::7f8e9d0c1b2a: "/requirements.txt": not found
