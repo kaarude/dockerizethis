@@ -47,3 +47,12 @@ func TestEnvExampleEmpty(t *testing.T) {
 	f := EnvExample(plan.Plan{})
 	require.Empty(t, f.Content)
 }
+
+func TestEnvExampleRejectsAssignmentsAndCommentsEveryHintLine(t *testing.T) {
+	f := EnvExample(plan.Plan{Env: []plan.EnvVar{
+		{Name: "BAD=secret"},
+		{Name: "BAD\nINJECTED"},
+		{Name: "VALID", Hint: "first\nINJECTED=secret\rlast"},
+	}})
+	require.Equal(t, "# first\n# INJECTED=secret\n# last\nVALID=\n", string(f.Content))
+}

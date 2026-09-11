@@ -1,6 +1,7 @@
 package emit
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -22,19 +23,40 @@ var diffWriter io.Writer = os.Stdout
 // Files earlier in the slice may already be written when a later file fails;
 // the results returned alongside the error describe those earlier writes.
 func write(root string, files []File, opts Options) ([]Result, error) {
-	targets := make([]string, len(files))
 	rels := make([]string, len(files))
 	for i, f := range files {
-		target, rel, err := resolveTarget(root, f.Path)
+		_, rel, err := resolveTarget(root, f.Path)
 		if err != nil {
 			return nil, err
 		}
-		targets[i], rels[i] = target, rel
+		rels[i] = rel
 	}
+
+	if len(files) == 0 {
+		return []Result{}, nil
+	}
+	if !opts.DryRun {
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			return nil, fmt.Errorf("emit: create root: %w", err)
+		}
+	}
+	dir, err := os.OpenRoot(root)
+	if err != nil {
+		if opts.DryRun && errors.Is(err, fs.ErrNotExist) {
+			results := make([]Result, 0, len(files))
+			for i, f := range files {
+				printDiff(f.Path, nil, f.Content)
+				results = append(results, Result{Path: rels[i], Action: "would-create"})
+			}
+			return results, nil
+		}
+		return nil, fmt.Errorf("emit: open root: %w", err)
+	}
+	defer func() { _ = dir.Close() }()
 
 	results := make([]Result, 0, len(files))
 	for i, f := range files {
-		action, err := apply(f, targets[i], opts)
+		action, err := apply(dir, f, rels[i], opts)
 		if err != nil {
 			return results, err
 		}
@@ -43,87 +65,91 @@ func write(root string, files []File, opts Options) ([]Result, error) {
 	return results, nil
 }
 
-// apply applies one File to target and reports the action taken.
-func apply(file File, target string, opts Options) (string, error) {
-	exists, err := fileExists(target)
+// apply uses a directory handle so symlinks cannot redirect writes outside root.
+func apply(root *os.Root, file File, target string, opts Options) (string, error) {
+	info, err := root.Lstat(target)
+	exists := err == nil
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("emit: stat %s: %w", target, err)
+	}
+	if exists && !info.Mode().IsRegular() {
+		return "", fmt.Errorf("emit: target %s is not a regular file", target)
+	}
+	if exists && !opts.Force && !opts.Backup {
+		return "skipped-exists", nil
+	}
+	if opts.DryRun {
+		var old []byte
+		if exists {
+			old, err = root.ReadFile(target)
+			if err != nil {
+				return "", fmt.Errorf("emit: read %s: %w", target, err)
+			}
+		}
+		printDiff(file.Path, old, file.Content)
+		return "would-create", nil
+	}
+
+	tmp, err := stageFile(root, target, file)
 	if err != nil {
 		return "", err
 	}
-
-	switch {
-	case opts.DryRun:
-		old, err := os.ReadFile(target)
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return "", fmt.Errorf("emit: read %s: %w", target, err)
-		}
-		printDiff(file.Path, old, file.Content)
-		if exists {
-			return "would-overwrite", nil
-		}
-		return "would-create", nil
-
-	case !exists:
-		if err := writeFile(target, file); err != nil {
-			return "", err
+	defer func() { _ = root.Remove(tmp) }()
+	if !exists {
+		// Linking publishes atomically without replacing a concurrent writer's file.
+		if err := root.Link(tmp, target); err != nil {
+			if errors.Is(err, fs.ErrExist) {
+				return "skipped-exists", nil
+			}
+			return "", fmt.Errorf("emit: create %s: %w", target, err)
 		}
 		return "created", nil
-
-	case opts.Backup:
-		backup := target + ".bak"
-		if err := os.Rename(target, backup); err != nil {
+	}
+	if opts.Backup {
+		// Keep the original in place until its complete replacement is ready.
+		// Link refuses to replace an earlier backup.
+		if err := root.Link(target, target+".bak"); err != nil {
 			return "", fmt.Errorf("emit: back up %s: %w", target, err)
 		}
-		if err := writeFile(target, file); err != nil {
-			return "", err
-		}
-		return "backed-up", nil
-
-	case opts.Force:
-		if err := writeFile(target, file); err != nil {
-			return "", err
-		}
-		return "overwritten", nil
-
-	default:
-		return "skipped-exists", nil
 	}
+	if err := root.Rename(tmp, target); err != nil {
+		return "", fmt.Errorf("emit: replace %s: %w", target, err)
+	}
+	if opts.Backup {
+		return "backed-up", nil
+	}
+	return "created", nil
 }
 
-// writeFile writes content to a temporary file beside target and renames it
-// into place, so target never holds a partial file.
-func writeFile(target string, file File) error {
+// stageFile creates a complete temporary file beside the destination.
+func stageFile(root *os.Root, target string, file File) (string, error) {
 	dir := filepath.Dir(target)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("emit: create directory %s: %w", dir, err)
+	if err := root.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("emit: create directory %s: %w", dir, err)
 	}
-
-	tmp, err := os.CreateTemp(dir, ".dockerizethis-*.tmp")
+	tmpName := filepath.Join(dir, ".dockerizethis-"+rand.Text()+".tmp")
+	tmp, err := root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return fmt.Errorf("emit: create temporary file for %s: %w", target, err)
+		return "", fmt.Errorf("emit: create temporary file for %s: %w", target, err)
 	}
-	tmpName := tmp.Name()
+	complete := false
 	defer func() {
-		if tmpName != "" {
-			os.Remove(tmpName)
+		if !complete {
+			_ = tmp.Close()
+			_ = root.Remove(tmpName)
 		}
 	}()
-
 	if _, err := tmp.Write(file.Content); err != nil {
-		tmp.Close()
-		return fmt.Errorf("emit: write %s: %w", target, err)
+		return "", fmt.Errorf("emit: write %s: %w", target, err)
 	}
 	if err := tmp.Chmod(permissions(file.Mode)); err != nil {
-		tmp.Close()
-		return fmt.Errorf("emit: chmod %s: %w", target, err)
+		return "", fmt.Errorf("emit: chmod %s: %w", target, err)
 	}
 	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("emit: close %s: %w", target, err)
+		return "", fmt.Errorf("emit: close %s: %w", target, err)
 	}
-	if err := os.Rename(tmpName, target); err != nil {
-		return fmt.Errorf("emit: rename %s: %w", target, err)
-	}
-	tmpName = ""
-	return nil
+	complete = true
+	return tmpName, nil
 }
 
 // permissions returns mode's permission bits, defaulting to 0644.
@@ -149,17 +175,6 @@ func resolveTarget(root, name string) (target, rel string, err error) {
 		return "", "", fmt.Errorf("emit: path %q escapes root", name)
 	}
 	return target, filepath.ToSlash(rel), nil
-}
-
-func fileExists(path string) (bool, error) {
-	_, err := os.Lstat(path)
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
-	}
-	return false, fmt.Errorf("emit: stat %s: %w", path, err)
 }
 
 // printDiff writes a minimal line diff between old and new: shared leading and
