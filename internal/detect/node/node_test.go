@@ -23,6 +23,8 @@ func TestFixtures(t *testing.T) {
 				Process: plan.ProcessWeb, Port: 8080, Services: []plan.Service{plan.ServicePostgres},
 				Env:      []plan.EnvVar{{Name: "DATABASE_URL", Required: true}, {Name: "PORT"}},
 				StartCmd: "node src/index.js", Workdir: "/app", Confidence: 1,
+				Extras: map[string]string{"lockfile": "none"},
+				Notes:  []string{"no lockfile found; npm install is not reproducible — commit package-lock.json"},
 			},
 		},
 		{
@@ -31,6 +33,8 @@ func TestFixtures(t *testing.T) {
 				Stack: "node", Version: "20", PkgManager: "npm", Process: plan.ProcessWorker,
 				Env:      []plan.EnvVar{{Name: "DISCORD_TOKEN", Required: true}},
 				StartCmd: "node worker.mjs", Workdir: "/app", Confidence: 0.9,
+				Extras: map[string]string{"lockfile": "none"},
+				Notes:  []string{"no lockfile found; npm install is not reproducible — commit package-lock.json"},
 			},
 		},
 		{
@@ -39,6 +43,8 @@ func TestFixtures(t *testing.T) {
 				Stack: "node", Version: "20", PkgManager: "npm", Framework: "next",
 				Process: plan.ProcessWeb, Port: 3000, BuildCmd: "npm run build",
 				StartCmd: "next start", Workdir: "/app", Confidence: 0.8,
+				Extras: map[string]string{"lockfile": "none"},
+				Notes:  []string{"no lockfile found; npm install is not reproducible — commit package-lock.json"},
 			},
 		},
 	} {
