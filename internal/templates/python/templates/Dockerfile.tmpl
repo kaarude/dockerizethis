@@ -1,0 +1,38 @@
+FROM python:{{.Version}}-slim AS builder
+WORKDIR /app
+{{if or .Postgres .MySQL}}RUN apt-get update && apt-get install -y --no-install-recommends build-essential{{if .Postgres}} libpq-dev{{end}}{{if .MySQL}} pkg-config default-libmysqlclient-dev{{end}} \
+    && rm -rf /var/lib/apt/lists/*
+{{end}}RUN python -m venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+{{if eq .PkgManager "pip"}}{{if .PipProject}}COPY . .
+RUN /opt/venv/bin/pip install --no-cache-dir .
+{{else}}COPY . .
+RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+{{end}}{{else if eq .PkgManager "poetry"}}RUN pip install --no-cache-dir poetry poetry-plugin-export
+COPY . .
+RUN poetry export --only main --format requirements.txt --output /tmp/requirements.txt \
+    && /opt/venv/bin/pip install --no-cache-dir --no-deps -r /tmp/requirements.txt
+{{else if eq .PkgManager "uv"}}RUN pip install --no-cache-dir uv
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv UV_PYTHON_DOWNLOADS=0
+COPY . .
+RUN uv sync --locked --no-dev --no-editable
+{{else if eq .PkgManager "pdm"}}RUN pip install --no-cache-dir pdm
+COPY . .
+RUN pdm export --prod --format requirements --output /tmp/requirements.txt \
+    && /opt/venv/bin/pip install --no-cache-dir --no-deps -r /tmp/requirements.txt
+{{end}}
+FROM python:{{.Version}}-slim AS runtime
+WORKDIR /app
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+{{if index .Extras "pythonpath"}}ENV PYTHONPATH=/app/src
+{{end}}{{if or .Postgres .MySQL}}RUN apt-get update && apt-get install -y --no-install-recommends{{if .Postgres}} libpq5{{end}}{{if .MySQL}} libmariadb3{{end}} \
+    && rm -rf /var/lib/apt/lists/*
+{{end}}RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --create-home app
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=10001:10001 . .
+USER 10001:10001
+{{if eq .Process "web"}}EXPOSE {{.Port}}
+{{if .Healthcheck}}HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD {{.Healthcheck}}
+{{end}}{{end}}CMD {{.Command}}

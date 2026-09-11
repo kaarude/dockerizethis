@@ -1,0 +1,19 @@
+FROM golang:{{.Version}}-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache ca-certificates{{if .CGO}} build-base{{end}}
+# The wildcard also supports stdlib-only modules without go.sum.
+COPY go.mod go.sum* ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED={{if .CGO}}1{{else}}0{{end}} go build -trimpath -o /app/server {{.BuildPackage}}
+
+{{if .CGO}}FROM alpine:3.23 AS runtime
+RUN apk add --no-cache ca-certificates libgcc libstdc++ \
+    && addgroup -S -g 65532 app && adduser -S -u 65532 -G app app
+{{else}}FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+{{end}}WORKDIR /app
+COPY --from=builder --chown=65532:65532 /app/server /app/server
+USER 65532:65532
+{{if eq .Process "web"}}EXPOSE {{.Port}}
+{{end}}CMD ["/app/server"]
