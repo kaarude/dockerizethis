@@ -2,6 +2,7 @@ package emit
 
 import (
 	"bytes"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -260,4 +261,21 @@ func TestWriteConcurrentCreationDoesNotOverwrite(t *testing.T) {
 	}
 	require.Equal(t, 1, created)
 	require.Equal(t, winningContent, readFile(t, filepath.Join(root, "Dockerfile")))
+}
+
+type failingDiffWriter struct{ err error }
+
+func (w failingDiffWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestWriteReportsDryRunOutputFailure(t *testing.T) {
+	sentinel := errors.New("output unavailable")
+	previous := diffWriter
+	diffWriter = failingDiffWriter{err: sentinel}
+	t.Cleanup(func() { diffWriter = previous })
+	for _, root := range []string{t.TempDir(), filepath.Join(t.TempDir(), "missing")} {
+		results, err := Write(root, []File{{Path: "Dockerfile", Content: []byte("new")}}, Options{DryRun: true})
+		require.ErrorIs(t, err, sentinel)
+		require.Empty(t, results)
+		require.NoFileExists(t, filepath.Join(root, "Dockerfile"))
+	}
 }

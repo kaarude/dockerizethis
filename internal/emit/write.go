@@ -45,7 +45,9 @@ func write(root string, files []File, opts Options) ([]Result, error) {
 		if opts.DryRun && errors.Is(err, fs.ErrNotExist) {
 			results := make([]Result, 0, len(files))
 			for i, f := range files {
-				printDiff(f.Path, nil, f.Content)
+				if err := printDiff(f.Path, nil, f.Content); err != nil {
+					return results, err
+				}
 				results = append(results, Result{Path: rels[i], Action: "would-create"})
 			}
 			return results, nil
@@ -86,7 +88,9 @@ func apply(root *os.Root, file File, target string, opts Options) (string, error
 				return "", fmt.Errorf("emit: read %s: %w", target, err)
 			}
 		}
-		printDiff(file.Path, old, file.Content)
+		if err := printDiff(file.Path, old, file.Content); err != nil {
+			return "", err
+		}
 		return "would-create", nil
 	}
 
@@ -179,8 +183,9 @@ func resolveTarget(root, name string) (target, rel string, err error) {
 
 // printDiff writes a minimal line diff between old and new: shared leading and
 // trailing lines are elided, the rest is printed with - and + prefixes.
-func printDiff(path string, old, new []byte) {
-	fmt.Fprintf(diffWriter, "--- %s (current)\n+++ %s (generated)\n", path, path)
+func printDiff(path string, old, new []byte) error {
+	var output strings.Builder
+	fmt.Fprintf(&output, "--- %s (current)\n+++ %s (generated)\n", path, path)
 	oldLines, newLines := splitLines(old), splitLines(new)
 
 	prefix := 0
@@ -194,11 +199,15 @@ func printDiff(path string, old, new []byte) {
 	}
 
 	for _, line := range oldLines[prefix : len(oldLines)-suffix] {
-		fmt.Fprintf(diffWriter, "-%s\n", line)
+		fmt.Fprintf(&output, "-%s\n", line)
 	}
 	for _, line := range newLines[prefix : len(newLines)-suffix] {
-		fmt.Fprintf(diffWriter, "+%s\n", line)
+		fmt.Fprintf(&output, "+%s\n", line)
 	}
+	if _, err := io.WriteString(diffWriter, output.String()); err != nil {
+		return fmt.Errorf("emit: print diff for %s: %w", path, err)
+	}
+	return nil
 }
 
 func splitLines(content []byte) []string {
