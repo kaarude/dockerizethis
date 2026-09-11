@@ -92,6 +92,42 @@ func TestRunEmitsEnvExample(t *testing.T) {
 	require.Contains(t, string(content), "DATABASE_URL=\n")
 }
 
+func TestCompletePlanAddsComposeSecrets(t *testing.T) {
+	p := completePlan(plan.Plan{
+		Stack:    "go",
+		Services: []plan.Service{plan.ServicePostgres, plan.ServiceMongo},
+		Env:      []plan.EnvVar{{Name: "DATABASE_URL", Required: true}},
+	})
+	var names []string
+	for _, v := range p.Env {
+		names = append(names, v.Name)
+	}
+	require.Equal(t, []string{"DATABASE_URL", "MONGO_INITDB_ROOT_PASSWORD", "POSTGRES_PASSWORD"}, names,
+		"compose-required secrets are added and env stays sorted")
+	for _, v := range p.Env {
+		require.True(t, v.Required, v.Name)
+	}
+
+	// Existing entries get the compose hint without being duplicated.
+	p = completePlan(plan.Plan{
+		Services: []plan.Service{plan.ServicePostgres},
+		Env:      []plan.EnvVar{{Name: "POSTGRES_PASSWORD", Hint: "custom"}},
+	})
+	require.Len(t, p.Env, 1)
+	require.Equal(t, "custom", p.Env[0].Hint, "existing hints are preserved")
+	require.True(t, p.Env[0].Required)
+}
+
+func TestProjectRootRejectsEscapes(t *testing.T) {
+	for _, bad := range []string{"..", "../other", "/abs", "a/../../b"} {
+		_, err := projectRoot("/tmp/proj", bad)
+		require.Error(t, err, bad)
+	}
+	root, err := projectRoot("/tmp/proj", "services/api")
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join("/tmp/proj", "services/api"), root)
+}
+
 func TestRunDryRunWritesNothing(t *testing.T) {
 	dir := goProject(t)
 	prev := emit.SetDiffWriter(io.Discard)

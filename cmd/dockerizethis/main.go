@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -117,12 +118,10 @@ func run(cmd *cobra.Command, path string, opts options) error {
 		return fmt.Errorf("could not determine how this project runs: %s", strings.Join(p.Notes, "; "))
 	}
 
+	p = completePlan(p)
 	files, err := renderAll(p)
 	if err != nil {
 		return fmt.Errorf("render: %w", err)
-	}
-	if p.Stack == "node" {
-		p.Notes = append(p.Notes, noderender.RenderNotes(p)...)
 	}
 	rep := report{Path: root, Plan: p}
 
@@ -171,11 +170,45 @@ func projectRoot(path, service string) (string, error) {
 	if service == "" {
 		return path, nil
 	}
-	clean := filepath.Clean(service)
-	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	if !filepath.IsLocal(service) {
 		return "", fmt.Errorf("--service must name a subdirectory inside the project, got %q", service)
 	}
-	return filepath.Join(path, clean), nil
+	return filepath.Join(path, service), nil
+}
+
+// completePlan fills in plan fields the renderers need but detectors can't
+// know: env vars required by the generated compose services, plus the
+// renderer notes. Env is sorted for a stable .env.example.
+func completePlan(p plan.Plan) plan.Plan {
+	p.Env = slices.Clone(p.Env)
+	add := func(name, hint string) {
+		for i := range p.Env {
+			if p.Env[i].Name == name {
+				p.Env[i].Required = true
+				if p.Env[i].Hint == "" {
+					p.Env[i].Hint = hint
+				}
+				return
+			}
+		}
+		p.Env = append(p.Env, plan.EnvVar{Name: name, Required: true, Hint: hint})
+	}
+	for _, service := range p.Services {
+		switch service {
+		case plan.ServicePostgres:
+			add("POSTGRES_PASSWORD", "Password for the Compose postgres service; use the same password in DATABASE_URL with host postgres and port 5432")
+		case plan.ServiceMySQL:
+			add("MYSQL_PASSWORD", "Password for the Compose mysql app user")
+			add("MYSQL_ROOT_PASSWORD", "Root password for the Compose mysql service")
+		case plan.ServiceMongo:
+			add("MONGO_INITDB_ROOT_PASSWORD", "Root password for the Compose mongo service")
+		}
+	}
+	slices.SortFunc(p.Env, func(a, b plan.EnvVar) int { return strings.Compare(a.Name, b.Name) })
+	if p.Stack == "node" {
+		p.Notes = append(p.Notes, noderender.RenderNotes(p)...)
+	}
+	return p
 }
 
 // detectPlan runs every registered detector (or the one named by --stack)
