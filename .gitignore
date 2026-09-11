@@ -1,0 +1,19 @@
+# Build outputs
+/dockerizethis
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Coverage and profiling
+*.out
+*.prof
+/coverage/
+
+# Local Go workspace
+/go.work
+/go.work.sum
