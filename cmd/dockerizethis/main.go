@@ -1,11 +1,31 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
+
+	"github.com/carl/dockerizethis/internal/detect"
+	golangdetect "github.com/carl/dockerizethis/internal/detect/golang"
+	"github.com/carl/dockerizethis/internal/detect/node"
+	pythondetect "github.com/carl/dockerizethis/internal/detect/python"
+	"github.com/carl/dockerizethis/internal/emit"
+	"github.com/carl/dockerizethis/internal/plan"
+	"github.com/carl/dockerizethis/internal/templates/common"
+	golangrender "github.com/carl/dockerizethis/internal/templates/golang"
+	noderender "github.com/carl/dockerizethis/internal/templates/node"
+	pythonrender "github.com/carl/dockerizethis/internal/templates/python"
+	"github.com/carl/dockerizethis/internal/verify"
 )
 
 type options struct {
@@ -22,7 +42,7 @@ type options struct {
 func main() {
 	if err := newRootCommand().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		os.Exit(verify.Code(err))
 	}
 }
 
@@ -31,7 +51,7 @@ func newRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "dockerizethis [path]",
 		Short:         "Generate verified Docker hosting artifacts for a project",
-		Long:          "Generate verified Docker hosting artifacts for a project.\nThe path defaults to \".\". This scaffold does not generate or verify files yet.",
+		Long:          "Detect how a project runs, generate Docker hosting artifacts (Dockerfile, .dockerignore, docker-compose.yml, .env.example, a GHCR workflow, DEPLOY.md), and verify the image builds.\nThe path defaults to \".\".",
 		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -60,20 +80,306 @@ func newRootCommand() *cobra.Command {
 	return cmd
 }
 
-// run reserves the pipeline order until the internal packages are implemented.
+// detectors runs in registry order; the highest-confidence plan wins.
+var detectors = []detect.Detector{node.Detector{}, golangdetect.Detector{}, pythondetect.Detector{}}
+
+// report is the --json document and the source of the text summary.
+type report struct {
+	Path   string         `json:"path"`
+	Plan   plan.Plan      `json:"plan"`
+	Files  []emit.Result  `json:"files,omitempty"`
+	Verify *verifyOutcome `json:"verify,omitempty"`
+}
+
+type verifyOutcome struct {
+	Level string              `json:"level"`
+	Build *verify.Result      `json:"build,omitempty"`
+	Smoke *verify.SmokeResult `json:"smoke,omitempty"`
+}
+
 func run(cmd *cobra.Command, path string, opts options) error {
-	// TODO(detect): call internal/detect for path and opts.service, respecting opts.stack.
-	// TODO(plan): validate and complete the detected internal/plan.Plan; use opts.yes for prompts.
-	// TODO(emit): render artifacts and call internal/emit.Write with dry-run, force, and backup options.
-	// TODO(verify): call internal verification for opts.verify; skip execution during dry-run.
-	// TODO(report): call internal reporting with the emission and verification results.
-	message := "Pipeline not implemented; no files generated or verified."
-	if opts.json {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
-			Path    string `json:"path"`
-			Message string `json:"message"`
-		}{Path: path, Message: message})
+	root, err := projectRoot(path, opts.service)
+	if err != nil {
+		return err
 	}
-	_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\nProject: %s\n", message, path)
-	return err
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	p, err := detectPlan(root, opts.stack)
+	if err != nil {
+		return err
+	}
+	if p.Process == "" {
+		return fmt.Errorf("could not determine how this project runs: %s", strings.Join(p.Notes, "; "))
+	}
+
+	files, err := renderAll(p)
+	if err != nil {
+		return fmt.Errorf("render: %w", err)
+	}
+	if p.Stack == "node" {
+		p.Notes = append(p.Notes, noderender.RenderNotes(p)...)
+	}
+	rep := report{Path: root, Plan: p}
+
+	if !opts.dryRun && !opts.yes && interactive(cmd) {
+		if err := confirm(cmd, root, p, files); err != nil {
+			return err
+		}
+	}
+	if opts.json {
+		// Keep stdout pure JSON: dry-run diffs go to stderr instead.
+		prev := emit.SetDiffWriter(cmd.ErrOrStderr())
+		defer emit.SetDiffWriter(prev)
+	}
+	rep.Files, err = emit.Write(root, files, emit.Options{
+		DryRun: opts.dryRun, Force: opts.force, Backup: opts.backup,
+	})
+	if err != nil {
+		printReport(cmd, rep, opts.json)
+		return fmt.Errorf("emit: %w", err)
+	}
+
+	var verr error
+	if !opts.dryRun && opts.verify != "none" {
+		rep.Verify = &verifyOutcome{Level: opts.verify}
+		switch opts.verify {
+		case "build":
+			res, err := verify.Build(ctx, root, verify.DefaultDockerfile)
+			rep.Verify.Build = &res
+			verr = err
+		case "full":
+			res, err := verify.Smoke(ctx, root, p)
+			rep.Verify.Smoke = &res
+			verr = err
+		}
+	}
+	printReport(cmd, rep, opts.json)
+	if verr != nil {
+		printVerifyDiagnostics(cmd, rep.Verify)
+		return verr
+	}
+	return nil
+}
+
+// projectRoot joins --service onto the project path, rejecting escapes.
+func projectRoot(path, service string) (string, error) {
+	if service == "" {
+		return path, nil
+	}
+	clean := filepath.Clean(service)
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("--service must name a subdirectory inside the project, got %q", service)
+	}
+	return filepath.Join(path, clean), nil
+}
+
+// detectPlan runs every registered detector (or the one named by --stack)
+// and returns the highest-confidence plan.
+func detectPlan(root, stack string) (plan.Plan, error) {
+	active := detectors
+	if stack != "" {
+		active = nil
+		for _, d := range detectors {
+			if d.Name() == stack {
+				active = []detect.Detector{d}
+				break
+			}
+		}
+		if active == nil {
+			names := make([]string, len(detectors))
+			for i, d := range detectors {
+				names[i] = d.Name()
+			}
+			return plan.Plan{}, fmt.Errorf("unknown stack %q (supported: %s)", stack, strings.Join(names, ", "))
+		}
+	}
+	var best plan.Plan
+	var firstErr error
+	found := false
+	for _, d := range active {
+		p, ok, err := d.Detect(root)
+		if err != nil {
+			if stack != "" {
+				return plan.Plan{}, fmt.Errorf("detect %s: %w", stack, err)
+			}
+			if firstErr == nil {
+				firstErr = fmt.Errorf("%s: %w", d.Name(), err)
+			}
+			continue
+		}
+		if !ok {
+			continue
+		}
+		found = true
+		if p.Confidence > best.Confidence {
+			best = p
+		}
+	}
+	if found {
+		return best, nil
+	}
+	if stack != "" {
+		return plan.Plan{}, fmt.Errorf("no %s project detected in %s", stack, root)
+	}
+	if firstErr != nil {
+		return plan.Plan{}, fmt.Errorf("no supported stack detected in %s (first error: %w)", root, firstErr)
+	}
+	return plan.Plan{}, fmt.Errorf("no supported stack detected in %s — looked for package.json, go.mod, pyproject.toml, requirements.txt, or setup.py", root)
+}
+
+// renderAll produces the stack's own artifacts plus the shared ones:
+// compose, .env.example when the plan declares variables, the GHCR
+// workflow, and DEPLOY.md.
+func renderAll(p plan.Plan) ([]emit.File, error) {
+	var stack []emit.File
+	var err error
+	switch p.Stack {
+	case "node":
+		stack, err = noderender.RenderNode(p)
+	case "go":
+		stack, err = golangrender.RenderGo(p)
+	case "python":
+		stack, err = pythonrender.RenderPython(p)
+	default:
+		return nil, fmt.Errorf("no renderer for stack %q", p.Stack)
+	}
+	if err != nil {
+		return nil, err
+	}
+	files := append([]emit.File{}, stack...)
+	compose, err := common.RenderCompose(p)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, compose)
+	if len(p.Env) > 0 {
+		files = append(files, emit.EnvExample(p))
+	}
+	for _, render := range []func(plan.Plan) (emit.File, error){common.RenderAction, common.RenderDeployDoc} {
+		f, err := render(p)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, nil
+}
+
+// interactive reports whether stdin is a terminal the user can answer on.
+func interactive(cmd *cobra.Command) bool {
+	in, ok := cmd.InOrStdin().(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := in.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// confirm shows the plan and artifact list, then requires "y" to proceed.
+func confirm(cmd *cobra.Command, root string, p plan.Plan, files []emit.File) error {
+	out := cmd.ErrOrStderr()
+	fmt.Fprintf(out, "Plan: %s %s %s", p.Stack, p.Version, p.Process)
+	if p.Framework != "" {
+		fmt.Fprintf(out, " (%s)", p.Framework)
+	}
+	if p.Port != 0 {
+		fmt.Fprintf(out, " port %d", p.Port)
+	}
+	if len(p.Services) > 0 {
+		names := make([]string, len(p.Services))
+		for i, s := range p.Services {
+			names[i] = string(s)
+		}
+		fmt.Fprintf(out, " services: %s", strings.Join(names, ", "))
+	}
+	fmt.Fprintln(out)
+	for _, n := range p.Notes {
+		fmt.Fprintf(out, "  note: %s\n", n)
+	}
+	for _, f := range files {
+		fmt.Fprintf(out, "  %s\n", f.Path)
+	}
+	fmt.Fprintf(out, "Write these %d files to %s? [y/N] ", len(files), root)
+	line, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
+		return errors.New("aborted")
+	}
+	return nil
+}
+
+func printReport(cmd *cobra.Command, rep report, asJSON bool) {
+	out := cmd.OutOrStdout()
+	if asJSON {
+		_ = json.NewEncoder(out).Encode(rep)
+		return
+	}
+	p := rep.Plan
+	fmt.Fprintf(out, "Plan: %s %s %s", p.Stack, p.Version, p.Process)
+	if p.Framework != "" {
+		fmt.Fprintf(out, " (%s)", p.Framework)
+	}
+	if p.Port != 0 {
+		fmt.Fprintf(out, " port %d", p.Port)
+	}
+	fmt.Fprintf(out, " confidence %.1f\n", p.Confidence)
+	for _, r := range rep.Files {
+		fmt.Fprintf(out, "  %s %s\n", r.Action, r.Path)
+	}
+	switch {
+	case rep.Verify == nil:
+		fmt.Fprintln(out, "Verify: skipped")
+	case rep.Verify.Smoke != nil:
+		s := rep.Verify.Smoke
+		switch {
+		case s.Skipped:
+			fmt.Fprintf(out, "Verify: smoke skipped (%s)\n", s.Reason)
+		case s.OK:
+			fmt.Fprintf(out, "Verify: smoke ok (HTTP %d after %d attempts)\n", s.StatusCode, s.Attempts)
+		default:
+			fmt.Fprintln(out, "Verify: smoke failed")
+		}
+	case rep.Verify.Build != nil:
+		b := rep.Verify.Build
+		if b.OK {
+			fmt.Fprintf(out, "Verify: build ok (%d ms, %s)\n", b.DurationMs, b.Image)
+		} else {
+			fmt.Fprintln(out, "Verify: build failed")
+		}
+	}
+	for _, n := range p.Notes {
+		fmt.Fprintf(out, "Note: %s\n", n)
+	}
+}
+
+// printVerifyDiagnostics sends the failed step, log tail, and hint to
+// stderr so the machine-readable stdout report stays clean.
+func printVerifyDiagnostics(cmd *cobra.Command, v *verifyOutcome) {
+	out := cmd.ErrOrStderr()
+	if v.Build != nil && !v.Build.OK {
+		if v.Build.FailedStep != "" {
+			fmt.Fprintf(out, "failed step: %s\n", v.Build.FailedStep)
+		}
+		if v.Build.Stderr != "" {
+			fmt.Fprintf(out, "%s\n", v.Build.Stderr)
+		}
+		if v.Build.Hint != "" {
+			fmt.Fprintf(out, "hint: %s\n", v.Build.Hint)
+		}
+	}
+	if v.Smoke != nil && !v.Smoke.OK && !v.Smoke.Skipped {
+		if v.Smoke.Logs != "" {
+			fmt.Fprintf(out, "container logs:\n%s\n", v.Smoke.Logs)
+		}
+		if v.Smoke.Hint != "" {
+			fmt.Fprintf(out, "hint: %s\n", v.Smoke.Hint)
+		}
+	}
 }

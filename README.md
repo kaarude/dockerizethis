@@ -40,8 +40,8 @@ writing.
 | Stack | Detection markers | Status |
 | --- | --- | --- |
 | Node.js / TypeScript | `package.json`, lockfiles | Supported |
-| Go | `go.mod` | In progress |
-| Python | `pyproject.toml`, `requirements.txt` | In progress |
+| Go | `go.mod` | Supported |
+| Python | `pyproject.toml`, `requirements.txt` | Supported |
 
 Generated compose files can wire up Postgres, Redis, MySQL, and Mongo backing
 services with healthchecks and named volumes.
@@ -64,6 +64,16 @@ dockerizethis [path] [flags]
 | `--force` | bool | `false` | Allow replacing existing artifact files |
 | `--backup` | bool | `false` | Back up existing artifact files before replacement |
 | `--help`, `-h` | bool | `false` | Show help for the command |
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | Usage or infrastructure error |
+| 2 | `docker build` failed |
+| 3 | Smoke test failed (`--verify=full`) |
+| 4 | Docker CLI or daemon unavailable |
 
 ## How it works
 

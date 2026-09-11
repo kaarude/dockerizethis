@@ -16,6 +16,15 @@ const defaultFileMode fs.FileMode = 0o644
 // diffWriter receives dry-run previews. Tests replace it to capture output.
 var diffWriter io.Writer = os.Stdout
 
+// SetDiffWriter redirects dry-run diff previews, returning the previous
+// writer so callers can restore it. Callers use it to keep stdout clean for
+// structured output such as --json reports.
+func SetDiffWriter(w io.Writer) io.Writer {
+	prev := diffWriter
+	diffWriter = w
+	return prev
+}
+
 // write implements Write: it writes each file under root, leaving existing
 // files untouched unless opts.Force or opts.Backup allows a replacement.
 // With opts.DryRun nothing is written and a line diff is printed per file.
