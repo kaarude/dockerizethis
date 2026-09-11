@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.23"
+          go-version: "1.26"
           cache: true
       - name: Build
         run: go build ./...
@@ -45,10 +45,10 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.23"
+          go-version: "1.26"
           cache: true
-      # setup-go pins GOTOOLCHAIN=local, but go.mod targets a newer Go. Step env
-      # overrides it so the toolchain named in go.mod can be downloaded.
+      # setup-go pins GOTOOLCHAIN=local, but go.mod may target a newer Go. Step
+      # env overrides it so the toolchain named in go.mod can be downloaded.
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
