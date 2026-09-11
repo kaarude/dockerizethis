@@ -1,0 +1,35 @@
+--- Dockerfile (mode 0644) ---
+FROM node:22-alpine AS deps
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PATH="/app/node_modules/.bin:$PATH"
+RUN apk add --no-cache python3 make g++
+COPY package.json package-lock.json ./
+RUN NODE_ENV=development npm ci
+
+FROM deps AS build
+COPY . .
+RUN npm run build
+
+# No healthcheck generated: set HealthPath to an HTTP endpoint.
+# Using Alpine instead of distroless because native dependencies were detected.
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PATH="/app/node_modules/.bin:$PATH"
+COPY --from=build --chown=node:node /app /app
+USER node
+EXPOSE 3000
+CMD ["/bin/sh","-c","node dist/server.js"]
+--- .dockerignore (mode 0644) ---
+node_modules
+.git
+dist
+.env*
+*.md
+Dockerfile
+docker-compose.yml
+--- note ---
+No healthcheck generated: set HealthPath to an HTTP endpoint.
+--- note ---
+Using Alpine instead of distroless because native dependencies were detected.

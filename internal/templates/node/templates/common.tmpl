@@ -1,0 +1,57 @@
+{{define "stages" -}}
+FROM node:{{.Version}}-alpine AS deps
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PATH="/app/node_modules/.bin:$PATH"
+{{if or (eq .PkgManager "pnpm") (eq .PkgManager "yarn") -}}
+ENV COREPACK_HOME=/opt/corepack
+RUN npm install --global --force corepack && corepack enable
+{{if eq .PkgManager "yarn" -}}
+ENV YARN_NODE_LINKER=node-modules
+RUN corepack install --global yarn@stable
+{{end -}}
+{{else if eq .PkgManager "bun" -}}
+COPY --from=oven/bun:alpine /usr/local/bin/bun /usr/local/bin/bun
+{{end -}}
+{{if .NativeDeps -}}
+RUN apk add --no-cache python3 make g++
+{{end -}}
+COPY package.json {{.Lockfile}} ./
+RUN NODE_ENV=development {{.InstallCmd}}
+
+FROM deps AS build
+COPY . .
+{{if .BuildCmd -}}
+RUN {{.BuildCmd}}
+{{end -}}
+{{end}}
+{{define "node-runtime" -}}
+{{range .Warnings -}}
+# {{.}}
+{{end -}}
+{{if .Distroless -}}
+FROM gcr.io/distroless/nodejs{{.Version}} AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build --chown=1001:1001 /app /app
+USER 1001
+{{else -}}
+FROM node:{{.Version}}-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PATH="/app/node_modules/.bin:$PATH"
+{{if or (eq .PkgManager "pnpm") (eq .PkgManager "yarn") -}}
+ENV COREPACK_HOME=/opt/corepack
+COPY --from=deps /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/corepack
+COPY --from=deps /opt/corepack /opt/corepack
+RUN node /usr/local/lib/node_modules/corepack/dist/corepack.js enable
+{{if eq .PkgManager "yarn" -}}
+ENV YARN_NODE_LINKER=node-modules
+{{end -}}
+{{else if eq .PkgManager "bun" -}}
+COPY --from=deps /usr/local/bin/bun /usr/local/bin/bun
+{{end -}}
+COPY --from=build --chown=node:node /app /app
+USER node
+{{end -}}
+{{end}}
