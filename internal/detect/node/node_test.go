@@ -193,8 +193,8 @@ func TestProcessesAndFrameworks(t *testing.T) {
 		{"telegraf", "node bot.js", "", "", plan.ProcessWorker, 0},
 		{"bullmq", "node queue.js", "", "", plan.ProcessWorker, 0},
 		{"vite", "vite preview", "vite build", "", plan.ProcessStatic, 4173},
-		{"react-scripts", "react-scripts start", "react-scripts build", "", plan.ProcessStatic, 0},
-		{"astro", "astro preview", "astro build", "astro", plan.ProcessStatic, 0},
+		{"react-scripts", "react-scripts start", "react-scripts build", "", plan.ProcessStatic, 8080},
+		{"astro", "astro preview", "astro build", "astro", plan.ProcessStatic, 8080},
 		{"astro", "", "", "astro", "", 0},
 		{"express", "", "", "express", "", 0},
 		{"", "node worker.js", "", "", plan.ProcessWorker, 0},
@@ -231,6 +231,16 @@ func TestProcessesAndFrameworks(t *testing.T) {
 	t.Run("dev dependencies count", func(t *testing.T) {
 		p := detectFiles(t, map[string]string{"package.json": `{"devDependencies":{"vite":"*"},"scripts":{"build":"vite build"}}`})
 		require.Equal(t, plan.ProcessStatic, p.Process)
+	})
+	t.Run("react-scripts builds to build", func(t *testing.T) {
+		p := detectFiles(t, map[string]string{"package.json": `{"dependencies":{"react-scripts":"*"},"scripts":{"start":"react-scripts start","build":"react-scripts build"}}`})
+		require.Equal(t, "build", p.Extras["staticDir"])
+	})
+	t.Run("vite config wins over react-scripts", func(t *testing.T) {
+		p := detectFiles(t, map[string]string{"package.json": `{"dependencies":{"react-scripts":"*"},"devDependencies":{"vite":"*"},"scripts":{"build":"vite build"}}`})
+		require.Equal(t, plan.ProcessStatic, p.Process)
+		require.Equal(t, 4173, p.Port)
+		require.Empty(t, p.Extras["staticDir"])
 	})
 	t.Run("worker with build tooling has no preview port", func(t *testing.T) {
 		p := detectFiles(t, map[string]string{"package.json": `{"dependencies":{"bullmq":"*"},"devDependencies":{"vite":"*"},"scripts":{"start":"node worker.js","build":"vite build"}}`})

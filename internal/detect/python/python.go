@@ -24,7 +24,7 @@ func (Detector) Name() string { return "python" }
 var (
 	versionPattern    = regexp.MustCompile(`^(?:>=\s*|~=\s*|==\s*)?(3\.[0-9]+(?:\.[0-9]+)?)(?:$|[,\s])`)
 	requiresPattern   = regexp.MustCompile(`(?m)^\s*requires-python\s*=\s*["']([^"']+)["']`)
-	envPattern        = regexp.MustCompile(`\bos\s*\.\s*(?:getenv\s*\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']|environ\s*\[\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\])`)
+	envPattern        = regexp.MustCompile(`\bos\s*\.\s*(?:getenv\s*\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']|environ\s*\[\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\]|environ\s*\.\s*get\s*\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["'])`)
 	importPattern     = regexp.MustCompile(`(?m)^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import\b|import\s+([^\n;]+))`)
 	dependencyPattern = regexp.MustCompile(`(?m)(?:^\s*|["'])([A-Za-z][A-Za-z0-9_.-]*)(?:\[|[<>=!~; @"']|\s*$)`)
 	modulePattern     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$`)
@@ -117,11 +117,12 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		source := stripComments(string(data))
 		sources[filepath.ToSlash(rel)] = source
 		for _, match := range envPattern.FindAllStringSubmatch(source, -1) {
-			name := match[1]
-			if name == "" {
-				name = match[2]
+			for _, name := range match[1:] {
+				if name != "" {
+					names[name] = true
+					break
+				}
 			}
-			names[name] = true
 		}
 		for _, match := range importPattern.FindAllStringSubmatch(source, -1) {
 			if match[1] != "" {
