@@ -42,6 +42,9 @@ writing.
 | Node.js / TypeScript | `package.json`, lockfiles | Supported |
 | Go | `go.mod` | Supported |
 | Python | `pyproject.toml`, `requirements.txt` | Supported |
+| Rust | `Cargo.toml`, `rust-toolchain.toml` | Supported |
+| Java / Kotlin | `pom.xml`, `build.gradle`, `mvnw`/`gradlew` | Supported |
+| .NET (C# / F#) | `*.csproj`, `*.fsproj`, `*.sln` | Supported |
 
 Generated compose files can wire up Postgres, Redis, MySQL, and Mongo backing
 services with healthchecks and named volumes.

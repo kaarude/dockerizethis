@@ -17,15 +17,21 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/carl/dockerizethis/internal/detect"
+	dotnetdetect "github.com/carl/dockerizethis/internal/detect/dotnet"
 	golangdetect "github.com/carl/dockerizethis/internal/detect/golang"
+	javadetect "github.com/carl/dockerizethis/internal/detect/java"
 	"github.com/carl/dockerizethis/internal/detect/node"
 	pythondetect "github.com/carl/dockerizethis/internal/detect/python"
+	rustdetect "github.com/carl/dockerizethis/internal/detect/rust"
 	"github.com/carl/dockerizethis/internal/emit"
 	"github.com/carl/dockerizethis/internal/plan"
 	"github.com/carl/dockerizethis/internal/templates/common"
+	dotnetrender "github.com/carl/dockerizethis/internal/templates/dotnet"
 	golangrender "github.com/carl/dockerizethis/internal/templates/golang"
+	javarender "github.com/carl/dockerizethis/internal/templates/java"
 	noderender "github.com/carl/dockerizethis/internal/templates/node"
 	pythonrender "github.com/carl/dockerizethis/internal/templates/python"
+	rustrender "github.com/carl/dockerizethis/internal/templates/rust"
 	"github.com/carl/dockerizethis/internal/verify"
 )
 
@@ -82,7 +88,7 @@ func newRootCommand() *cobra.Command {
 }
 
 // detectors runs in registry order; the highest-confidence plan wins.
-var detectors = []detect.Detector{node.Detector{}, golangdetect.Detector{}, pythondetect.Detector{}}
+var detectors = []detect.Detector{node.Detector{}, golangdetect.Detector{}, pythondetect.Detector{}, rustdetect.Detector{}, javadetect.Detector{}, dotnetdetect.Detector{}}
 
 // report is the --json document and the source of the text summary.
 type report struct {
@@ -262,7 +268,7 @@ func detectPlan(root, stack string) (plan.Plan, error) {
 	if firstErr != nil {
 		return plan.Plan{}, fmt.Errorf("no supported stack detected in %s (first error: %w)", root, firstErr)
 	}
-	return plan.Plan{}, fmt.Errorf("no supported stack detected in %s — looked for package.json, go.mod, pyproject.toml, requirements.txt, or setup.py", root)
+	return plan.Plan{}, fmt.Errorf("no supported stack detected in %s — looked for package.json, go.mod, pyproject.toml, requirements.txt, setup.py, Cargo.toml, pom.xml, build.gradle, or a .NET project file", root)
 }
 
 // renderAll produces the stack's own artifacts plus the shared ones:
@@ -278,6 +284,12 @@ func renderAll(p plan.Plan) ([]emit.File, error) {
 		stack, err = golangrender.RenderGo(p)
 	case "python":
 		stack, err = pythonrender.RenderPython(p)
+	case "rust":
+		stack, err = rustrender.RenderRust(p)
+	case "java":
+		stack, err = javarender.RenderJava(p)
+	case "dotnet":
+		stack, err = dotnetrender.RenderDotnet(p)
 	default:
 		return nil, fmt.Errorf("no renderer for stack %q", p.Stack)
 	}

@@ -1,0 +1,20 @@
+--- Dockerfile (mode 0644) ---
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+WORKDIR /app
+COPY . .
+RUN dotnet publish app.csproj -c Release -o /app/out
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
+COPY --from=builder --chown=1654:1654 /app/out .
+USER app
+EXPOSE 8080
+CMD ["/bin/sh","-c","exec dotnet /app/app.dll"]
+--- .dockerignore (mode 0644) ---
+.git
+.env*
+bin
+obj
+out
+Dockerfile
+docker-compose.yml
