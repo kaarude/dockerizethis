@@ -389,3 +389,14 @@ func TestSmokeProgressFailureDoesNotReportPass(t *testing.T) {
 	require.Equal(t, "failed", r.Verify.Status)
 	require.Nil(t, r.Verify.Smoke)
 }
+
+func TestNewStacks(t *testing.T) {
+	for _, tc := range []struct{ fixture, stack string }{{"rust-bin-worker", "rust"}, {"java-quarkus", "java"}, {"dotnet-web", "dotnet"}} {
+		t.Run(tc.stack, func(t *testing.T) {
+			r, _, err := execute(t, fixture(t, tc.fixture), "--yes", "--verify=none", "--stack="+tc.stack)
+			require.NoError(t, err)
+			require.Equal(t, tc.stack, r.Plan.Stack)
+			require.NotEmpty(t, r.Results)
+		})
+	}
+}

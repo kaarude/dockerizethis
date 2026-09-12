@@ -16,15 +16,21 @@ import (
 	"syscall"
 
 	"github.com/carl/dockerizethis/internal/detect"
+	"github.com/carl/dockerizethis/internal/detect/dotnet"
 	"github.com/carl/dockerizethis/internal/detect/golang"
+	"github.com/carl/dockerizethis/internal/detect/java"
 	"github.com/carl/dockerizethis/internal/detect/node"
 	"github.com/carl/dockerizethis/internal/detect/python"
+	"github.com/carl/dockerizethis/internal/detect/rust"
 	"github.com/carl/dockerizethis/internal/emit"
 	"github.com/carl/dockerizethis/internal/plan"
 	"github.com/carl/dockerizethis/internal/templates/common"
+	dotnettemplate "github.com/carl/dockerizethis/internal/templates/dotnet"
 	gotemplate "github.com/carl/dockerizethis/internal/templates/golang"
+	javatemplate "github.com/carl/dockerizethis/internal/templates/java"
 	nodetemplate "github.com/carl/dockerizethis/internal/templates/node"
 	pytemplate "github.com/carl/dockerizethis/internal/templates/python"
+	rusttemplate "github.com/carl/dockerizethis/internal/templates/rust"
 	"github.com/carl/dockerizethis/internal/verify"
 	"github.com/spf13/cobra"
 )
@@ -54,7 +60,7 @@ func newRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dockerize [path]",
 		Short: "Generate verified Docker hosting artifacts for a project",
-		Long:  "Detect a Node.js, Go, or Python project and generate Docker hosting artifacts.\nThe path defaults to \".\". Existing artifacts are kept unless --force or --backup is set.\nVerification builds the image by default; --dry-run never writes or runs Docker.",
+		Long:  "Detect a Node.js, Go, Python, Rust, Java/Kotlin, or .NET project and generate Docker hosting artifacts.\nThe path defaults to \".\". Existing artifacts are kept unless --force or --backup is set.\nVerification builds the image by default; --dry-run never writes or runs Docker.",
 		Args:  cobra.MaximumNArgs(1), SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode, err := verify.ParseMode(opts.verify)
@@ -73,7 +79,7 @@ func newRootCommand() *cobra.Command {
 	flags.BoolVar(&opts.yes, "yes", false, "Accept prompts without interaction")
 	flags.BoolVar(&opts.json, "json", false, "Print the report as JSON")
 	flags.StringVar(&opts.verify, "verify", "build", "Verification level: none, build, or full")
-	flags.StringVar(&opts.stack, "stack", "", "Select a detected stack: node, go, or python")
+	flags.StringVar(&opts.stack, "stack", "", "Select a detected stack: node, go, python, rust, java, or dotnet")
 	flags.StringVar(&opts.service, "service", "", "Select a service subdirectory in a monorepo")
 	flags.BoolVar(&opts.force, "force", false, "Allow replacing existing artifact files")
 	flags.BoolVar(&opts.backup, "backup", false, "Back up existing artifact files before replacement")
@@ -133,7 +139,7 @@ func run(cmd *cobra.Command, path string, opts options, mode verify.Mode) (runEr
 	if !info.IsDir() {
 		return fmt.Errorf("project path must be a directory: %s", path)
 	}
-	p, err := detectPlan(path, opts.stack, []detect.Detector{node.Detector{}, golang.Detector{}, python.Detector{}})
+	p, err := detectPlan(path, opts.stack, []detect.Detector{node.Detector{}, golang.Detector{}, python.Detector{}, rust.Detector{}, java.Detector{}, dotnet.Detector{}})
 	if err != nil {
 		return err
 	}
@@ -200,7 +206,7 @@ func detectPlan(dir, stack string, detectors []detect.Detector) (plan.Plan, erro
 		return plan.Plan{}, fmt.Errorf("stack %q was not detected; checked %s", stack, strings.Join(checked, ", "))
 	}
 	if len(matches) == 0 {
-		return plan.Plan{}, fmt.Errorf("no supported project detected; checked %s: package.json, go.mod, pyproject.toml, requirements.txt, setup.py", strings.Join(checked, ", "))
+		return plan.Plan{}, fmt.Errorf("no supported project detected; checked %s: package.json, go.mod, pyproject.toml, requirements.txt, setup.py, Cargo.toml, pom.xml, build.gradle, .NET project files", strings.Join(checked, ", "))
 	}
 	best := matches[0].plan
 	for _, m := range matches[1:] {
@@ -254,6 +260,12 @@ func render(p plan.Plan) ([]emit.File, error) {
 		files, err = gotemplate.RenderGo(p)
 	case "python":
 		files, err = pytemplate.RenderPython(p)
+	case "rust":
+		files, err = rusttemplate.RenderRust(p)
+	case "java":
+		files, err = javatemplate.RenderJava(p)
+	case "dotnet":
+		files, err = dotnettemplate.RenderDotnet(p)
 	default:
 		return nil, fmt.Errorf("no renderer for stack %q", p.Stack)
 	}

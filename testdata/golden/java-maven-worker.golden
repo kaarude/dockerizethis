@@ -1,0 +1,25 @@
+--- Dockerfile (mode 0644) ---
+FROM maven:3.9-eclipse-temurin-21 AS builder
+WORKDIR /app
+COPY . .
+RUN mvn -B -DskipTests package
+# A glob copy fails when the build produced more than one jar; in that case
+# pin the artifact name in the build configuration.
+RUN cp target/*.jar /app/app.jar
+
+FROM eclipse-temurin:21-jre AS runtime
+RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --create-home app
+WORKDIR /app
+COPY --from=builder --chown=10001:10001 /app/app.jar /app/app.jar
+USER 10001:10001
+CMD ["/bin/sh","-c","exec java -jar /app/app.jar"]
+--- .dockerignore (mode 0644) ---
+.git
+.env*
+target
+build
+.gradle
+out
+*.class
+Dockerfile
+docker-compose.yml
