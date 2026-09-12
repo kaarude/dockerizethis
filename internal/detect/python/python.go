@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,7 +30,7 @@ var (
 	dependencyPattern = regexp.MustCompile(`(?m)(?:^\s*|["'])([A-Za-z][A-Za-z0-9_.-]*)(?:\[|[<>=!~; @"']|\s*$)`)
 	modulePattern     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$`)
 	appPattern        = regexp.MustCompile(`(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]+)?=\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?(FastAPI|Flask|Starlette)\s*\(`)
-	healthPattern     = regexp.MustCompile(`(?:\.(?:get|route)\s*\(\s*["']/health["']|\bpath\s*\(\s*["']health["'])`)
+	healthPattern     = regexp.MustCompile(`(?:\.(?:get|route|add_url_rule)\s*\(\s*["']/|\bpath\s*\(\s*["']/?)(healthz?/?)["']|\bre_path\s*\(\s*r?["']\^?/?(healthz?/?)(?:\$)?["']`)
 )
 
 func (Detector) Detect(dir string) (plan.Plan, bool, error) {
@@ -205,9 +206,13 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		p.Notes = append(p.Notes, "entry point guessed as "+entry+"; confirm the start command")
 	}
 	if p.Process == plan.ProcessWeb {
-		for _, source := range sources {
-			if healthPattern.MatchString(source) {
-				p.HealthPath = "/health"
+		for _, name := range slices.Sorted(maps.Keys(sources)) {
+			if match := healthPattern.FindStringSubmatch(sources[name]); match != nil {
+				healthPath := match[1]
+				if healthPath == "" {
+					healthPath = match[2]
+				}
+				p.HealthPath = "/" + healthPath
 				break
 			}
 		}

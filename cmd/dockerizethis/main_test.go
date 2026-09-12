@@ -251,6 +251,17 @@ func TestComposeEnvironmentAndHumanReport(t *testing.T) {
 	}
 }
 
+func TestPrintReportPortlessPlan(t *testing.T) {
+	var out bytes.Buffer
+	r := report{Plan: &plan.Plan{Stack: "go", Version: "1.23", Process: plan.ProcessWorker}, Results: []emit.Result{}}
+	require.NoError(t, printReport(&out, "/tmp/project", r, false))
+	require.Contains(t, out.String(), "Port: none")
+	r.Plan.Port = 8080
+	out.Reset()
+	require.NoError(t, printReport(&out, "/tmp/project", r, false))
+	require.Contains(t, out.String(), "Port: 8080")
+}
+
 func TestUnavailableDocker(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	r, _, err := execute(t, fixture(t, "go-http"), "--verify=full")

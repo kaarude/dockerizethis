@@ -120,6 +120,48 @@ d = os.getenv('OPTIONAL', 'default')
 	require.Contains(t, p.Notes[0], "uvicorn is required")
 }
 
+func TestHealthPathSpellings(t *testing.T) {
+	for _, tc := range []struct {
+		name, code, want string
+	}{
+		{"django path", `path("health", health)`, "/health"},
+		{"django trailing slash", `path("health/", health)`, "/health/"},
+		{"django anchored raw regex", `re_path(r"^health/$", health)`, "/health/"},
+		{"django anchored healthz", `re_path(r"^healthz$", health)`, "/healthz"},
+		{"django dynamic regex ignored", `re_path(r"^health/.*$", health)`, ""},
+		{"django re_path", `re_path("health/", health)`, "/health/"},
+		{"django leading slash", `path("/health/", health)`, "/health/"},
+		{"fastapi get", `@app.get("/health")`, "/health"},
+		{"fastapi trailing slash", `@app.get("/health/")`, "/health/"},
+		{"healthz", `@app.get("/healthz")`, "/healthz"},
+		{"flask route", `@app.route('/health')`, "/health"},
+		{"flask add_url_rule", `app.add_url_rule("/health", "health", health)`, "/health"},
+		{"longer name ignored", `@app.get("/healthy")`, ""},
+		{"nested route ignored", `@app.get("/api/health")`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			write(t, dir, "requirements.txt", "fastapi\nuvicorn\n")
+			write(t, dir, "main.py", "from fastapi import FastAPI\napp = FastAPI()\n"+tc.code)
+			p, ok, err := (python.Detector{}).Detect(dir)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, plan.ProcessWeb, p.Process)
+			require.Equal(t, tc.want, p.HealthPath)
+		})
+	}
+	t.Run("workers skip health routes", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "requirements.txt", "celery\n")
+		write(t, dir, "worker.py", "path(\"health/\", health)\n")
+		p, ok, err := (python.Detector{}).Detect(dir)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, plan.ProcessWorker, p.Process)
+		require.Empty(t, p.HealthPath)
+	})
+}
+
 func TestAbsentAndFailures(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "main.py", "import fastapi")

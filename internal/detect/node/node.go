@@ -127,10 +127,11 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		p.Notes = append(p.Notes, "no start script or main field; provide a start command")
 	}
 
-	p.Env, p.Port, err = scanSources(dir)
+	scan, err := scanSources(dir, p.Framework, *m)
 	if err != nil {
 		return plan.Plan{}, false, err
 	}
+	p.Env, p.Port = scan.env, scan.port
 	if p.Port == 0 {
 		switch {
 		case p.Framework == "next" || p.Framework == "nuxt":
@@ -140,6 +141,14 @@ func (Detector) Detect(dir string) (plan.Plan, bool, error) {
 		case p.Process == plan.ProcessStatic:
 			// The generated runtime is nginx, which needs a valid listen port.
 			p.Port = 8080
+		case p.Process == plan.ProcessWeb:
+			p.Port = scan.listenPort
+		}
+	}
+	if p.Process == plan.ProcessWeb {
+		p.HealthPath = scan.healthPath
+		if p.Port == 0 {
+			p.Notes = append(p.Notes, "could not detect a listen port; use process.env.PORT with a default or a literal .listen(port) call")
 		}
 	}
 	// An explicit react-scripts build still emits build/ when Vite is also installed.
@@ -251,16 +260,25 @@ func longRunning(command string) bool {
 var envPattern = regexp.MustCompile(`process\.env\.([A-Z_][A-Z0-9_]*)\b`)
 var portPattern = regexp.MustCompile(`process\.env\.PORT\b\s*(?:,\s*10\s*)?\)*\s*(?:\|\||\?\?)\s*["']?([0-9]+)\b`)
 
-func scanSources(dir string) ([]plan.EnvVar, int, error) {
+// sourceScan collects source evidence without executing the project.
+type sourceScan struct {
+	env        []plan.EnvVar
+	port       int
+	listenPort int
+	healthPath string
+}
+
+func scanSources(dir string, framework string, m manifest) (sourceScan, error) {
+	var scan sourceScan
 	names := make(map[string]bool)
-	port := 0
+	entryPoint := sourceEntryPoint(m)
 	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if entry.IsDir() {
 			switch entry.Name() {
-			case "node_modules", "dist", "build", ".git":
+			case "node_modules", "dist", "build", ".git", ".next", ".nuxt", ".output", "coverage", "test", "tests", "__tests__", "__mocks__", "fixtures", "examples":
 				if path != dir {
 					return filepath.SkipDir
 				}
@@ -271,8 +289,11 @@ func scanSources(dir string) ([]plan.EnvVar, int, error) {
 		if !entry.Type().IsRegular() {
 			return nil
 		}
+		if strings.Contains(entry.Name(), ".test.") || strings.Contains(entry.Name(), ".spec.") {
+			return nil
+		}
 		switch filepath.Ext(path) {
-		case ".ts", ".js", ".mjs":
+		case ".ts", ".js", ".mjs", ".cjs", ".tsx", ".jsx", ".vue":
 		default:
 			return nil
 		}
@@ -285,21 +306,42 @@ func scanSources(dir string) ([]plan.EnvVar, int, error) {
 		}
 		for _, match := range portPattern.FindAllSubmatch(data, -1) {
 			value, err := strconv.Atoi(string(match[1]))
-			if err == nil && value > 0 && value <= 65535 && port == 0 {
-				port = value
+			if err == nil && value > 0 && value <= 65535 && scan.port == 0 {
+				scan.port = value
 			}
+		}
+		if rel, err := filepath.Rel(dir, path); err == nil && filepath.ToSlash(rel) == entryPoint && filepath.Ext(path) != ".tsx" && filepath.Ext(path) != ".jsx" {
+			scan.listenPort, scan.healthPath = directWebCalls(string(data), framework)
+		}
+		if scan.healthPath == "" {
+			scan.healthPath = fileRouteHealthPath(dir, path, framework, string(data))
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("scan Node sources: %w", err)
+		return sourceScan{}, fmt.Errorf("scan Node sources: %w", err)
 	}
-	var env []plan.EnvVar
 	for name := range names {
-		env = append(env, plan.EnvVar{Name: name, Required: requiredEnv(name)})
+		scan.env = append(scan.env, plan.EnvVar{Name: name, Required: requiredEnv(name)})
 	}
-	slices.SortFunc(env, func(a, b plan.EnvVar) int { return strings.Compare(a.Name, b.Name) })
-	return env, port, nil
+	slices.SortFunc(scan.env, func(a, b plan.EnvVar) int { return strings.Compare(a.Name, b.Name) })
+	return scan, nil
+}
+
+// Only direct node startup commands identify a runtime file without executing a shell.
+func sourceEntryPoint(m manifest) string {
+	entry := m.Main
+	if m.Scripts["start"] != "" {
+		args := strings.Fields(m.Scripts["start"])
+		if len(args) != 2 || args[0] != "node" {
+			return ""
+		}
+		entry = args[1]
+	}
+	if filepath.IsAbs(entry) {
+		return ""
+	}
+	return filepath.ToSlash(filepath.Clean(entry))
 }
 
 func requiredEnv(name string) bool {
