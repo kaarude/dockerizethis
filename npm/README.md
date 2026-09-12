@@ -19,8 +19,8 @@ npm/
 The root package `dockerizethis` lists `dockerizethis-<os>-<cpu>` packages in
 `optionalDependencies`. Each platform package carries `os`/`cpu` fields so npm
 installs only the one matching the user's machine. At run time
-`bin/dockerize.js` resolves that package's `bin/dockerize[.exe]`, then falls
-back to `$DOCKERIZE_BIN` or a `dockerize` on `PATH`.
+`bin/dockerize.js` uses `$DOCKERIZE_BIN` when set, otherwise resolves that
+package's `bin/dockerize[.exe]`, then falls back to a `dockerize` on `PATH`.
 
 ## Local smoke test (no publishing)
 
@@ -38,13 +38,21 @@ After a tagged `goreleaser release` (or `goreleaser release --snapshot` for a
 dry run):
 
 ```sh
-npm/scripts/build-npm-packages.sh 1.2.3 dist/
-npm publish npm/dist/packed/dockerizethis-*.tgz
+set -e
+version=1.2.3
+npm/scripts/build-npm-packages.sh "$version" --goreleaser dist/
+for package in ./npm/dist/packed/dockerizethis-*.tgz; do
+  [ "$package" = "./npm/dist/packed/dockerizethis-$version.tgz" ] && continue
+  npm publish "$package"
+done
+npm publish "./npm/dist/packed/dockerizethis-$version.tgz"
 ```
 
-Platform tarballs must be published alongside (or before) the root package —
-`optionalDependencies` tolerate a missing package, but users on that platform
-would hit the "no prebuilt binary" error.
+Set `version` to the release version. Publish platform
+tarballs before the root package. Missing optional dependencies do not fail
+installation, but users on those platforms cannot run the bundled binary.
+To check the publish commands without uploading anything, add `--dry-run` to
+both `npm publish` commands. For prereleases, also pass `--tag next` to both.
 
 ## The `dockerize` name collision
 

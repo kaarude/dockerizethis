@@ -2,7 +2,7 @@
 // Resolves the platform-specific dockerize binary installed via
 // optionalDependencies and runs it with the caller's arguments.
 
-const { spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -68,19 +68,29 @@ function main() {
     process.exit(1);
   }
 
-  const result = spawnSync(binary, process.argv.slice(2), {
+  const child = spawn(binary, process.argv.slice(2), {
     stdio: "inherit",
     env: process.env,
   });
-  if (result.error) {
-    console.error(`dockerizethis: failed to run ${binary}: ${result.error}`);
+  // Keep the launcher alive while the Go process cancels work and cleans up.
+  const forwardSIGINT = () => child.kill("SIGINT");
+  const forwardSIGTERM = () => child.kill("SIGTERM");
+  process.on("SIGINT", forwardSIGINT);
+  process.on("SIGTERM", forwardSIGTERM);
+
+  child.on("error", (error) => {
+    console.error(`dockerizethis: failed to run ${binary}: ${error}`);
     process.exit(1);
-  }
-  if (result.signal) {
-    process.kill(process.pid, result.signal);
-    return;
-  }
-  process.exit(result.status ?? 1);
+  });
+  child.on("close", (code, signal) => {
+    process.removeListener("SIGINT", forwardSIGINT);
+    process.removeListener("SIGTERM", forwardSIGTERM);
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
+    process.exit(code ?? 1);
+  });
 }
 
 main();
