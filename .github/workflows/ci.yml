@@ -37,6 +37,11 @@ jobs:
         run: go test ./...
         env:
           GOTOOLCHAIN: auto
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Test npm launcher
+        run: node --test npm/dockerizethis/test/*.test.js
 
   lint:
     name: lint
