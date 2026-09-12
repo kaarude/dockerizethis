@@ -19,15 +19,10 @@ On a fresh Debian or Ubuntu VPS:
 2. Get this repository onto the server — `git clone`, or `rsync -a` from your
    machine.
 
-3. Create `.env` from the template and fill in real values:
-
-   ```sh
-   cp -n .env.example .env
-   ```
-
-   `docker-compose.yml` reads `.env` automatically for both `env_file` and
-   `${VAR}` interpolation. Remove optional assignments you do not need so
-   empty values do not replace the app's defaults. Keep an existing `.env`.
+3. No environment setup is needed to use the app's defaults. With Docker
+   Compose 2.24.0 or newer, the generated configuration loads `.env` only
+   when it exists. To override a default, create `.env` with just the values
+   you want to set. See `.env.example` for the detected variable names.
 
 4. Build and start everything:
 
@@ -53,17 +48,6 @@ app.example.com {
 	reverse_proxy localhost:3000
 }
 ```
-
-## Services and data
-
-- **postgres**: data lives in the `postgres_data` named volume, which survives
-  `docker compose down` but not `docker compose down -v`. Back up with
-  `docker compose exec postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup.sql`.
-
-- **redis**: runs without a named volume — treat its data as ephemeral cache or
-  queue state. If you need persistence, enable AOF (`--appendonly yes`) and add
-  a volume.
-
 ## Updating
 
 Redeploy after pulling new code with:

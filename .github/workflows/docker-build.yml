@@ -41,6 +41,12 @@ jobs:
         run: go build -o dockerize ./cmd/dockerize
         env:
           GOTOOLCHAIN: auto
+      - name: Verify Compose startup without optional environment file
+        if: matrix.fixture == 'go-http'
+        run: go test ./cmd/dockerize -run '^TestComposeOptionalEnvironment$' -v
+        env:
+          GOTOOLCHAIN: auto
+          DOCKERIZETHIS_DOCKER_TEST: "1"
       - name: Generate artifacts and verify the image build
         run: |
           work=$(mktemp -d)

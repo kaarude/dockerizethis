@@ -346,7 +346,17 @@ func printReport(out io.Writer, path string, r report, dryRun bool) error {
 	}
 	if len(r.Results) > 0 {
 		if len(p.Env) > 0 {
-			text.WriteString("Configure .env from .env.example before starting:\n")
+			if slices.ContainsFunc(p.Env, func(v plan.EnvVar) bool { return v.Required }) {
+				text.WriteString("Configure required values in .env before starting; see .env.example:\n")
+			} else if slices.ContainsFunc(r.Results, func(v emit.Result) bool {
+				return v.Path == "docker-compose.yml" && v.Action == "skipped-exists"
+			}) {
+				text.WriteString("Existing docker-compose.yml kept; it may still require .env.\n")
+				text.WriteString("Review changes with --dry-run --force, then use --backup to update artifacts.\n")
+				text.WriteString("Optional overrides in .env:\n")
+			} else {
+				text.WriteString("No .env setup needed for app defaults. Optional overrides in .env:\n")
+			}
 			for _, v := range p.Env {
 				label := "optional; omit to keep the app default"
 				if v.Required {

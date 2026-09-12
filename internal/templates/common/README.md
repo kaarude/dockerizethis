@@ -6,7 +6,10 @@ never reads the project directory or mutates the plan.
 
 - `RenderCompose(p)` renders `docker-compose.yml`: an `app` service with
   `build: .` and `restart: unless-stopped`, `env_file: .env` only when the
-  plan declares variables, and a published port only for `web` plans. Each
+  plan declares variables, and a published port only for `web` plans. If every
+  detected variable is optional, `env_file` uses `required: false` so missing
+  `.env` files do not prevent startup. This needs Docker Compose 2.24.0 or
+  newer. Plans with required settings keep a required `.env` reference. Each
   known backing service gets an image, a healthcheck, and
   `condition: service_healthy` in the app's `depends_on`. Postgres, MySQL, and
   Mongo get named volumes; Redis stays ephemeral.
@@ -19,7 +22,7 @@ never reads the project directory or mutates the plan.
 A web plan with a port outside 1–65535 fails instead of producing a bad port
 mapping. Unknown process types and unknown services produce `TODO` comments
 rather than wrong instructions. Nothing here writes a `.env` file — the
-compose file only references the one the user creates from `.env.example`.
+Compose file loads an existing `.env` without changing its values.
 
 ```sh
 go test ./internal/templates/common

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"slices"
 	"text/template"
 
 	"github.com/carl/dockerizethis/internal/emit"
@@ -37,13 +38,14 @@ type commonData struct {
 	Worker         bool
 	Static         bool
 	UnknownProcess bool
+	RequiredEnv    bool
 	DependsOn      []plan.Service
 	UnknownSvcs    []plan.Service
 	Volumes        []string
 }
 
 func prepare(p plan.Plan) commonData {
-	d := commonData{Plan: p}
+	d := commonData{Plan: p, RequiredEnv: slices.ContainsFunc(p.Env, func(v plan.EnvVar) bool { return v.Required })}
 	switch p.Process {
 	case plan.ProcessWeb:
 		d.Web = true
@@ -86,7 +88,8 @@ func render(name, path string, p plan.Plan) (emit.File, error) {
 // known service carries a healthcheck, so app can wait on
 // condition: service_healthy. It never emits a .env file; compose resolves
 // ${VAR} references from the project's own .env, and env_file is listed only
-// when the plan declares variables.
+// when the plan declares variables. The file is optional if none are required,
+// so the app can use its defaults without a manually created .env.
 func RenderCompose(p plan.Plan) (emit.File, error) {
 	if (p.Process == plan.ProcessWeb || p.Process == plan.ProcessStatic) && (p.Port < 1 || p.Port > 65535) {
 		return emit.File{}, fmt.Errorf("render compose: web/static port must be between 1 and 65535")
