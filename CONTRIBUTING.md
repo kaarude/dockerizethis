@@ -33,8 +33,8 @@ against every fixture under `testdata/fixtures/`.
 For CLI changes, also confirm the help text and the command path you touched:
 
 ```sh
-go run ./cmd/dockerizethis --help
-go run ./cmd/dockerizethis ./some-project
+go run ./cmd/dockerize --help
+go run ./cmd/dockerize ./some-project
 ```
 
 Keep test coverage focused on observable behavior and failure cases. A test that pins a

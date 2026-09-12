@@ -15,7 +15,7 @@ body:
     id: proposal
     attributes:
       label: Proposed solution
-      description: What should dockerizethis do?
+      description: What should dockerize do?
     validations:
       required: true
   - type: textarea

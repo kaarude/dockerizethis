@@ -1,5 +1,5 @@
 # Build outputs
-/dockerizethis
+/dockerize
 /bin/
 /dist/
 *.exe

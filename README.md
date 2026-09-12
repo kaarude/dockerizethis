@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/kaarude/dockerizethis?include_prereleases)](https://github.com/kaarude/dockerizethis/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-dockerizethis detects Node.js, Go, and Python apps and generates `Dockerfile`,
+dockerize detects Node.js, Go, and Python apps and generates `Dockerfile`,
 `.dockerignore`, `docker-compose.yml`, a GHCR publishing workflow, and
 `DEPLOY.md`. Projects with environment variables also get `.env.example`.
 By default it builds the image with Docker.
@@ -18,24 +18,24 @@ Build from a checkout with the Go version declared in `go.mod`:
 ```sh
 git clone https://github.com/kaarude/dockerizethis.git
 cd dockerizethis
-go build -o dockerizethis ./cmd/dockerizethis
-./dockerizethis --help
+go build -o dockerize ./cmd/dockerize
+./dockerize --help
 ```
 
 The commands below assume the binary is on your `PATH`. When using the checkout,
-replace `dockerizethis` with the path to that binary.
+replace `dockerize` with the path to that binary.
 
 ## Quickstart
 
 ```sh
 # Inspect the proposed files. This never writes or calls Docker.
-dockerizethis ./my-app --dry-run
+dockerize ./my-app --dry-run
 
 # Generate artifacts and build the image. Requires a running Docker daemon.
-dockerizethis ./my-app --yes
+dockerize ./my-app --yes
 
 # Generate artifacts without Docker.
-dockerizethis ./my-app --yes --verify=none
+dockerize ./my-app --yes --verify=none
 ```
 
 The path defaults to `.`. With terminal output, writing requires a `y` or `yes`
@@ -45,7 +45,7 @@ original as `<filename>.bak` before replacing it. An existing backup causes an
 error. Earlier files may already have been written when a later file fails.
 
 Example output for the `go-http` fixture copied to `/work/my-app`, using
-`dockerizethis /work/my-app --yes --verify=none`:
+`dockerize /work/my-app --yes --verify=none`:
 
 ```text
 Project: /work/my-app
@@ -104,7 +104,7 @@ Verification results include build output or the HTTP probe result when run.
 Prompts, progress, dry-run diffs, and error diagnostics go to stderr:
 
 ```sh
-dockerizethis ./my-app --dry-run --json > report.json
+dockerize ./my-app --dry-run --json > report.json
 ```
 
 ## Supported stacks
@@ -134,7 +134,7 @@ GitHub does not discover workflows nested inside service directories.
 ## Flags
 
 ```
-dockerizethis [path] [flags]
+dockerize [path] [flags]
 ```
 
 | Flag | Type | Default | Description |

@@ -10,9 +10,9 @@ details or secrets in a public issue.
 Include the affected commit or release, reproduction steps, and the impact you
 observed.
 
-## What dockerizethis does with secrets
+## What dockerize does with secrets
 
-dockerizethis reads a project to detect its stack and writes Docker artifacts into that
+dockerize reads a project to detect its stack and writes Docker artifacts into that
 project. It does not copy secret values anywhere.
 
 The `.env.example` it generates lists variable names, whether each one is required, and a
