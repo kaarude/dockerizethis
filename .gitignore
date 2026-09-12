@@ -17,3 +17,7 @@
 # Local Go workspace
 /go.work
 /go.work.sum
+
+# npm packaging
+/npm/dist/
+node_modules/

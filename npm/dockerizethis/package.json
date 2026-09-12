@@ -1,0 +1,30 @@
+{
+  "name": "dockerizethis",
+  "version": "0.0.0-dev",
+  "description": "Detect how a project runs and generate verified Docker artifacts — Dockerfile, .dockerignore, docker-compose.yml, .env.example, a GHCR workflow, and DEPLOY.md.",
+  "keywords": [
+    "docker",
+    "dockerfile",
+    "docker-compose",
+    "containerize",
+    "deploy"
+  ],
+  "homepage": "https://github.com/kaarude/dockerizethis",
+  "bugs": "https://github.com/kaarude/dockerizethis/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaarude/dockerizethis.git"
+  },
+  "license": "MIT",
+  "bin": {
+    "dockerize": "bin/dockerize.js",
+    "dockerizethis": "bin/dockerize.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=14"
+  },
+  "optionalDependencies": {}
+}
