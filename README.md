@@ -114,6 +114,9 @@ dockerize ./my-app --dry-run --json > report.json
 | Node.js / TypeScript | `package.json`, lockfiles | Supported |
 | Go | `go.mod` | Supported |
 | Python | `pyproject.toml`, `requirements.txt`, `setup.py` | Supported |
+| Rust | `Cargo.toml`, `rust-toolchain.toml` | Supported |
+| Java / Kotlin | `pom.xml`, `build.gradle`, `mvnw`/`gradlew` | Supported |
+| .NET | `*.csproj`, `*.fsproj`, `*.vbproj`, `*.sln` | Supported |
 
 Generated Compose files include Postgres, Redis, MySQL, and Mongo when detected.
 Postgres, MySQL, and Mongo use named volumes; Redis is ephemeral by default.
@@ -122,9 +125,9 @@ and environment before deploying. Node projects without a lockfile use
 `npm install` during the image build; committing a lockfile makes later builds
 reproducible.
 
-All three detectors run. The highest confidence wins, with ties resolved in
-Node, Go, Python order. `--stack=node|go|python` selects a stack only if it was
-detected. Detector read or parse errors are reported instead of silently ignored.
+All six detectors run. The highest confidence wins, with ties resolved in
+Node, Go, Python, Rust, Java, .NET order.
+`--stack=node|go|python|rust|java|dotnet` selects a stack only if it was detected. Detector read or parse errors are reported instead of silently ignored.
 
 `--service=services/api` inspects and writes inside that subdirectory. For a
 monorepo, move the generated workflow to the repository's root

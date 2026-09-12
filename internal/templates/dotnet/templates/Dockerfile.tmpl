@@ -1,0 +1,12 @@
+FROM mcr.microsoft.com/dotnet/sdk:{{.Version}} AS builder
+WORKDIR /app
+COPY . .
+RUN dotnet publish {{if .ProjectFile}}{{.ProjectFile}} {{end}}-c Release -o /app/out{{if .TargetFramework}} --framework {{.TargetFramework}}{{end}}
+
+FROM mcr.microsoft.com/dotnet/{{if eq .Process "web"}}aspnet{{else}}runtime{{end}}:{{.Version}} AS runtime
+WORKDIR /app
+COPY --from=builder --chown=1654:1654 /app/out .
+{{if .NonRoot}}USER app
+{{end}}{{if eq .Process "web"}}ENV ASPNETCORE_URLS=http://+:{{.Port}}
+EXPOSE {{.Port}}
+{{end}}CMD {{.Command}}
