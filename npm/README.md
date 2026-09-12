@@ -46,6 +46,20 @@ Platform tarballs must be published alongside (or before) the root package —
 `optionalDependencies` tolerate a missing package, but users on that platform
 would hit the "no prebuilt binary" error.
 
-Note: the name `dockerize` is already taken on npm, hence `dockerizethis`.
-The shim still registers a `dockerize` bin, so `npx dockerize` works inside
-projects that installed this package — only the *package* name differs.
+## The `dockerize` name collision
+
+The npm name `dockerize` belongs to an unrelated abandoned package
+(v0.1.0, "Docker your Node apps"), so a bare `npx dockerize` with no local
+install fetches *that* — its crashes are not ours. Workable invocations,
+all covered in `dockerizethis/README.md`:
+
+- `npx dockerizethis` — the public entrypoint.
+- `npx -p dockerizethis dockerize` — runs this package's `dockerize` bin.
+- `npm i -D dockerizethis` in a project → `npx dockerize` resolves the
+  local `.bin/dockerize` shim before npx ever asks the registry.
+- `npm i -g dockerizethis` → `dockerize` on `PATH`; npx prefers it over
+  the squatted package.
+
+If the `dockerize` name is ever transferred or a scope is preferred
+(`npx @scope/dockerize`), only `dockerizethis/package.json`'s `name` and
+the platform-package map in `bin/dockerize.js` change.
