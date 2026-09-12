@@ -58,22 +58,34 @@ Port: 8080 | services: none | confidence: 90%
   created .github/workflows/docker.yml
   created DEPLOY.md
 Verification: skipped (--verify=none)
-Configure .env from .env.example before starting:
+No .env setup needed for app defaults. Optional overrides in .env:
   PORT (optional; omit to keep the app default)
 Next: in /work/my-app, review DEPLOY.md and run docker compose up -d --build.
 ```
 
-Before starting, review the generated files. If `.env.example` exists, copy it
-to `.env`, fill the required values, and remove optional assignments you do not
-need. Values in `.env.example` are deliberately empty. Database passwords used
-by Compose are included, and app connection URLs must use the Compose service
-hostname and matching credentials.
+Before starting, review the generated files. When all detected settings are
+optional, no `.env` setup is needed. The generated Compose file uses the app's
+defaults and loads `.env` if it exists. This requires Docker Compose 2.24.0 or
+newer. To override a default, add only the settings you need to `.env`.
+
+When settings are marked required, create `.env` from `.env.example` and fill
+in their values. Keep any existing `.env`, and remove optional assignments you
+do not need. Empty assignments can replace app defaults. Database passwords
+used by Compose are included in the template; app connection URLs must use
+the Compose service hostname and matching credentials.
 
 ```sh
 cd my-app
-cp .env.example .env  # only when the template exists; edit before continuing
+# Only when required settings need configuration:
+# cp -n .env.example .env  # then fill the required values
 docker compose up -d --build
 ```
+
+Existing generated files are still preserved by default. To update an older
+Compose file that requires `.env` for optional settings, inspect the changes
+with `dockerize ./my-app --dry-run --force`, then use `--backup` to regenerate
+artifacts while keeping the originals as `.bak` files. Existing `.env` values
+are never changed by dockerize.
 
 ## Verification and reports
 

@@ -42,6 +42,10 @@ func TestRenderCommonGolden(t *testing.T) {
 		{"web-only", func(p *plan.Plan) {
 			p.Services, p.Env = nil, nil
 		}},
+		{"web-optional-env", func(p *plan.Plan) {
+			p.Services = nil
+			p.Env = []plan.EnvVar{{Name: "PORT"}}
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := webPlan()
@@ -109,6 +113,21 @@ func TestComposeConditionals(t *testing.T) {
 	compose = string(file.Content)
 	require.NotContains(t, compose, "depends_on")
 	require.NotContains(t, compose, "\nvolumes:")
+}
+
+func TestComposeOptionalEnvironment(t *testing.T) {
+	p := webPlan()
+	p.Services = nil
+	p.Env = []plan.EnvVar{{Name: "PORT"}}
+	file, err := common.RenderCompose(p)
+	require.NoError(t, err)
+	require.Contains(t, string(file.Content), "    env_file:\n      - path: .env\n        required: false\n")
+
+	p.Env = append(p.Env, plan.EnvVar{Name: "API_TOKEN", Required: true})
+	file, err = common.RenderCompose(p)
+	require.NoError(t, err)
+	require.Contains(t, string(file.Content), "    env_file:\n      - .env\n")
+	require.NotContains(t, string(file.Content), "required: false")
 }
 
 func TestComposeNeverEmitsEnvFile(t *testing.T) {
@@ -203,7 +222,7 @@ func TestRenderDeployDoc(t *testing.T) {
 	doc := string(file.Content)
 	for _, want := range []string{
 		"docker compose up -d --build",
-		"cp .env.example .env",
+		"cp -n .env.example .env",
 		"Caddy",
 		"reverse_proxy localhost:3000",
 		"postgres_data",

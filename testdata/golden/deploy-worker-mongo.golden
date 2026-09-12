@@ -22,11 +22,12 @@ On a fresh Debian or Ubuntu VPS:
 3. Create `.env` from the template and fill in real values:
 
    ```sh
-   cp .env.example .env
+   cp -n .env.example .env
    ```
 
    `docker-compose.yml` reads `.env` automatically for both `env_file` and
-   `${VAR}` interpolation.
+   `${VAR}` interpolation. Remove optional assignments you do not need so
+   empty values do not replace the app's defaults. Keep an existing `.env`.
 
 4. Build and start everything:
 

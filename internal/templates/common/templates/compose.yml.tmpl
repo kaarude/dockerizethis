@@ -8,7 +8,12 @@ services:
     restart: unless-stopped
 {{- if .Env }}
     env_file:
+{{- if .RequiredEnv }}
       - .env
+{{- else }}
+      - path: .env
+        required: false
+{{- end }}
 {{- end }}
 {{- if or .Web .Static }}
     ports:

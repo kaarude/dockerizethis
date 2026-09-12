@@ -262,6 +262,53 @@ func TestPrintReportPortlessPlan(t *testing.T) {
 	require.Contains(t, out.String(), "Port: 8080")
 }
 
+func TestOptionalEnvironmentNeedsNoSetup(t *testing.T) {
+	dir := fixture(t, "go-http")
+	cmd := newRootCommand()
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{dir, "--yes", "--verify=none"})
+	require.NoError(t, cmd.Execute())
+	require.Contains(t, output.String(), "No .env setup needed for app defaults.")
+	require.Contains(t, output.String(), "PORT (optional; omit to keep the app default)")
+	require.NotContains(t, output.String(), "Configure required values")
+	require.NoFileExists(t, filepath.Join(dir, ".env"))
+	compose, err := os.ReadFile(filepath.Join(dir, "docker-compose.yml"))
+	require.NoError(t, err)
+	require.Contains(t, string(compose), "required: false")
+}
+
+func TestOptionalEnvironmentWithExistingCompose(t *testing.T) {
+	dir := fixture(t, "go-http")
+	composePath := filepath.Join(dir, "docker-compose.yml")
+	oldCompose := []byte("services:\n  app:\n    build: .\n    env_file: .env\n")
+	require.NoError(t, os.WriteFile(composePath, oldCompose, 0o644))
+	for _, backup := range []bool{false, true} {
+		cmd := newRootCommand()
+		var output bytes.Buffer
+		cmd.SetOut(&output)
+		args := []string{dir, "--yes", "--verify=none"}
+		if backup {
+			args = append(args, "--backup")
+		}
+		cmd.SetArgs(args)
+		require.NoError(t, cmd.Execute())
+		compose, err := os.ReadFile(composePath)
+		require.NoError(t, err)
+		if backup {
+			require.Contains(t, output.String(), "No .env setup needed for app defaults.")
+			require.Contains(t, string(compose), "required: false")
+			original, err := os.ReadFile(composePath + ".bak")
+			require.NoError(t, err)
+			require.Equal(t, oldCompose, original)
+		} else {
+			require.Contains(t, output.String(), "Existing docker-compose.yml kept; it may still require .env.")
+			require.NotContains(t, output.String(), "No .env setup needed")
+			require.Equal(t, oldCompose, compose)
+		}
+	}
+}
+
 func TestUnavailableDocker(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	r, _, err := execute(t, fixture(t, "go-http"), "--verify=full")
